@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prompt Cowboy Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #121214;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #27272a;
+      -webkit-app-region: drag;
+    }
+    .header img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .header h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .header .version {
+      font-size: 11px;
+      background: #27272a;
+      color: #f97316;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: auto;
+    }
+
+    .content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #a1a1aa;
+    }
+    .form-group select {
+      background: #18181b;
+      border: 1px solid #3f3f46;
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+    .form-group select:focus {
+      border-color: #f97316;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #e4e4e7;
+      cursor: pointer;
+      padding: 6px 0;
+    }
+    .checkbox-row input {
+      accent-color: #f97316;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .btn-secondary {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #d4d4d8;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-secondary:hover {
+      background: #3f3f46;
+      color: #ffffff;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding-top: 14px;
+      border-top: 1px solid #27272a;
+    }
+    .btn-save {
+      background: #f97316;
+      border: none;
+      color: #ffffff;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-save:hover {
+      background: #ea580c;
+    }
+    .btn-cancel {
+      background: transparent;
+      border: none;
+      color: #a1a1aa;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-cancel:hover {
+      color: #ffffff;
+    }
+
+    #update-status {
+      font-size: 11px;
+      color: #a1a1aa;
+      text-align: center;
+      min-height: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
+    <h2>Prompt Cowboy Settings</h2>
+    <span class="version" id="app-version">v1.1.0</span>
+  </div>
+
+  <div class="content">
+    <div class="form-group">
+      <label for="shortcut-select">Global Activation Shortcut:</label>
+      <select id="shortcut-select">
+        <option value="CommandOrControl+Shift+P">Ctrl + Shift + P (Default)</option>
+        <option value="Alt+Space">Alt + Space (Spotlight style)</option>
+        <option value="CommandOrControl+Space">Ctrl + Space</option>
+        <option value="CommandOrControl+Shift+Space">Ctrl + Shift + Space</option>
+        <option value="F1">F1</option>
+        <option value="F4">F4</option>
+        <option value="Alt+P">Alt + P</option>
+      </select>
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="autostart-checkbox" />
+      <span>Launch automatically when Windows starts</span>
+    </label>
+
+    <div class="action-row">
+      <button class="btn-secondary" id="btn-snap-corner">📌 Snap to Corner</button>
+      <button class="btn-secondary" id="btn-check-updates">🔄 Check Updates</button>
+    </div>
+    <div id="update-status"></div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-cancel" id="btn-close">Cancel</button>
+    <button class="btn-save" id="btn-save">Save Settings</button>
+  </div>
+
+  <script>
+    const shortcutSelect = document.getElementById('shortcut-select');
+    const autostartCheckbox = document.getElementById('autostart-checkbox');
+    const btnSnapCorner = document.getElementById('btn-snap-corner');
+    const btnCheckUpdates = document.getElementById('btn-check-updates');
+    const btnClose = document.getElementById('btn-close');
+    const btnSave = document.getElementById('btn-save');
+    const updateStatus = document.getElementById('update-status');
+
+    // Load configuration
+    window.electronAPI.getConfig().then(cfg => {
+      if (cfg.shortcut) {
+        shortcutSelect.value = cfg.shortcut;
+      }
+      if (cfg.openAtLogin !== undefined) {
+        autostartCheckbox.checked = cfg.openAtLogin;
+      }
+    });
+
+    btnSnapCorner.onclick = () => {
+      window.electronAPI.snapToCorner();
+    };
+
+    btnCheckUpdates.onclick = async () => {
+      updateStatus.textContent = 'Checking for updates on GitHub...';
+      const res = await window.electronAPI.checkUpdates();
+      if (res.status === 'latest') {
+        updateStatus.textContent = '✓ You are running the latest version.';
+      } else if (res.status === 'error') {
+        updateStatus.textContent = 'Could not reach update server.';
+      }
+    };
+
+    btnSave.onclick = async () => {
+      const selectedShortcut = shortcutSelect.value;
+      const enableAutostart = autostartCheckbox.checked;
+
+      await window.electronAPI.setCustomShortcut(selectedShortcut);
+      await window.electronAPI.toggleAutostart(enableAutostart);
+      window.close();
+    };
+
+    btnClose.onclick = () => {
+      window.close();
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        window.close();
+      }
+    });
+  </script>
+</body>
+</html>
