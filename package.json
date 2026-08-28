@@ -1,7 +1,7 @@
 {
   "name": "prompt-cowboy-overlay",
   "productName": "Prompt Cowboy",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Modern Floating Desktop Overlay for Prompt Cowboy",
   "main": "main.js",
   "author": {
