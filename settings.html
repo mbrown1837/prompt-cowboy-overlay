@@ -49,6 +49,7 @@
       padding: 2px 6px;
       border-radius: 4px;
       margin-left: auto;
+      font-weight: 600;
     }
 
     .content {
@@ -89,7 +90,7 @@
       font-size: 13px;
       color: #e4e4e7;
       cursor: pointer;
-      padding: 6px 0;
+      padding: 4px 0;
     }
     .checkbox-row input {
       accent-color: #f97316;
@@ -160,10 +161,27 @@
     }
 
     #update-status {
-      font-size: 11px;
-      color: #a1a1aa;
+      font-size: 12px;
       text-align: center;
-      min-height: 14px;
+      min-height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+    .status-checking {
+      color: #38bdf8;
+    }
+    .status-latest {
+      color: #22c55e;
+    }
+    .status-available {
+      color: #f97316;
+    }
+    .status-error {
+      color: #ef4444;
     }
   </style>
 </head>
@@ -214,14 +232,18 @@
     const btnClose = document.getElementById('btn-close');
     const btnSave = document.getElementById('btn-save');
     const updateStatus = document.getElementById('update-status');
+    const appVersion = document.getElementById('app-version');
 
-    // Load configuration
+    // Load initial configuration
     window.electronAPI.getConfig().then(cfg => {
       if (cfg.shortcut) {
         shortcutSelect.value = cfg.shortcut;
       }
       if (cfg.openAtLogin !== undefined) {
         autostartCheckbox.checked = cfg.openAtLogin;
+      }
+      if (cfg.version) {
+        appVersion.textContent = 'v' + cfg.version;
       }
     });
 
@@ -230,12 +252,28 @@
     };
 
     btnCheckUpdates.onclick = async () => {
-      updateStatus.textContent = 'Checking for updates on GitHub...';
-      const res = await window.electronAPI.checkUpdates();
-      if (res.status === 'latest') {
-        updateStatus.textContent = '✓ You are running the latest version.';
-      } else if (res.status === 'error') {
-        updateStatus.textContent = 'Could not reach update server.';
+      updateStatus.className = 'status-checking';
+      updateStatus.innerHTML = '<span>⏳</span> Checking for updates on GitHub...';
+      btnCheckUpdates.disabled = true;
+
+      try {
+        const res = await window.electronAPI.checkUpdates();
+        btnCheckUpdates.disabled = false;
+
+        if (res.status === 'latest') {
+          updateStatus.className = 'status-latest';
+          updateStatus.innerHTML = `<span>✓</span> You are running the latest version (${res.currentVersion || 'v1.1.0'}).`;
+        } else if (res.status === 'update-available') {
+          updateStatus.className = 'status-available';
+          updateStatus.innerHTML = `<span>✨</span> Update ${res.latestVersion} available! Downloading...`;
+        } else {
+          updateStatus.className = 'status-error';
+          updateStatus.innerHTML = `<span>⚠️</span> ${res.error || 'Could not reach update server.'}`;
+        }
+      } catch (err) {
+        btnCheckUpdates.disabled = false;
+        updateStatus.className = 'status-error';
+        updateStatus.innerHTML = '<span>⚠️</span> Unable to check for updates.';
       }
     };
 

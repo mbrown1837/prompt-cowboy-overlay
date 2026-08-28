@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, session, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -6,7 +6,7 @@ let autoUpdater = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
 } catch (e) {
-  console.log('electron-updater not available in dev mode:', e);
+  console.log('electron-updater not loaded in dev mode:', e);
 }
 
 let mainWindow = null;
@@ -260,6 +260,59 @@ function registerAppShortcut(shortcutKey) {
   }
 }
 
+function checkGitHubReleaseUpdate() {
+  return new Promise((resolve) => {
+    const request = net.request({
+      method: 'GET',
+      url: 'https://api.github.com/repos/mbrown1837/prompt-cowboy-overlay/releases/latest',
+      headers: {
+        'User-Agent': 'PromptCowboyApp',
+      },
+    });
+
+    let body = '';
+    request.on('response', (response) => {
+      if (response.statusCode !== 200) {
+        resolve({ status: 'error', error: `Server returned HTTP ${response.statusCode}` });
+        return;
+      }
+      response.on('data', (chunk) => {
+        body += chunk;
+      });
+      response.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const latestTag = (data.tag_name || '').replace(/^v/, '');
+          const currentVer = app.getVersion().replace(/^v/, '');
+
+          if (latestTag && latestTag > currentVer) {
+            resolve({
+              status: 'update-available',
+              latestVersion: 'v' + latestTag,
+              currentVersion: 'v' + currentVer,
+              releaseUrl: data.html_url,
+            });
+          } else {
+            resolve({
+              status: 'latest',
+              currentVersion: 'v' + currentVer,
+              latestVersion: 'v' + latestTag,
+            });
+          }
+        } catch (e) {
+          resolve({ status: 'error', error: 'Failed to parse update info' });
+        }
+      });
+    });
+
+    request.on('error', (err) => {
+      resolve({ status: 'error', error: err.message || 'Network error' });
+    });
+
+    request.end();
+  });
+}
+
 function setupAutoUpdater() {
   if (!autoUpdater) return;
   autoUpdater.autoDownload = true;
@@ -289,8 +342,8 @@ function setupAutoUpdater() {
 
   if (app.isPackaged) {
     setTimeout(() => {
-      autoUpdater.checkForUpdatesAndNotify().catch((e) => console.log('Update check error:', e));
-    }, 3000);
+      autoUpdater.checkForUpdatesAndNotify().catch((e) => console.log('Auto-update error:', e));
+    }, 4000);
   }
 }
 
@@ -298,6 +351,7 @@ function setupAutoUpdater() {
 ipcMain.handle('get-config', () => {
   const cfg = loadConfig();
   cfg.openAtLogin = app.getLoginItemSettings().openAtLogin;
+  cfg.version = app.getVersion();
   return cfg;
 });
 
@@ -327,22 +381,11 @@ ipcMain.handle('toggle-autostart', (_event, enable) => {
 });
 
 ipcMain.handle('check-updates', async () => {
-  if (!autoUpdater || !app.isPackaged) {
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'Check for Updates',
-      message: `You are running Prompt Cowboy v${app.getVersion()}.`,
-      buttons: ['OK'],
-    });
-    return { status: 'latest' };
+  const result = await checkGitHubReleaseUpdate();
+  if (result.status === 'update-available' && autoUpdater && app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(() => {});
   }
-  try {
-    const res = await autoUpdater.checkForUpdates();
-    return { status: 'checked', res };
-  } catch (e) {
-    dialog.showErrorBox('Update Check Failed', e.message || 'Unable to check for updates.');
-    return { status: 'error', error: e.message };
-  }
+  return result;
 });
 
 ipcMain.on('open-settings', () => openSettingsWindow());
@@ -490,14 +533,20 @@ function createTray() {
     },
     {
       label: 'Check for Updates...',
-      click: () => {
-        if (autoUpdater && app.isPackaged) {
-          autoUpdater.checkForUpdatesAndNotify();
-        } else {
+      click: async () => {
+        const res = await checkGitHubReleaseUpdate();
+        if (res.status === 'latest') {
           dialog.showMessageBox({
             type: 'info',
             title: 'Prompt Cowboy Updates',
-            message: `You are running Prompt Cowboy v${app.getVersion()}.`,
+            message: `✓ You are running the latest version of Prompt Cowboy (${res.currentVersion}).`,
+            buttons: ['OK'],
+          });
+        } else if (res.status === 'update-available') {
+          dialog.showMessageBox({
+            type: 'info',
+            title: 'Update Available',
+            message: `✨ Update ${res.latestVersion} is available! Downloading...`,
             buttons: ['OK'],
           });
         }
