@@ -8,7 +8,7 @@ let tray = null;
 let isExpanded = false;
 let isAnimating = false;
 
-// Exact Grammarly Size (36px total window, 32px inner circle)
+// Compact Round Bubble Dimensions
 const BUBBLE_WIDTH = 36;
 const BUBBLE_HEIGHT = 36;
 const HEADER_HEIGHT = 42;
@@ -157,6 +157,7 @@ function collapseToBubble() {
   animateBounds(startBounds, endBounds, 120, 8, () => {
     isExpanded = false;
     mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    mainWindow.show();
   });
 }
 
@@ -241,9 +242,29 @@ ipcMain.on('reload-content', () => {
   }
 });
 
+// Dynamic Bubble Drag-to-Position IPC
+ipcMain.on('move-bubble', (_event, { dx, dy }) => {
+  if (!isExpanded && mainWindow && !mainWindow.isDestroyed()) {
+    const bounds = mainWindow.getBounds();
+    const newX = bounds.x + dx;
+    const newY = bounds.y + dy;
+    mainWindow.setBounds({
+      x: newX,
+      y: newY,
+      width: BUBBLE_WIDTH,
+      height: BUBBLE_HEIGHT,
+    });
+    const config = loadConfig();
+    config.bubbleX = newX;
+    config.bubbleY = newY;
+    saveConfig(config);
+  }
+});
+
 function createWindow() {
   const config = loadConfig();
 
+  // Create and immediately show & elevate on screen
   mainWindow = new BrowserWindow({
     x: config.bubbleX,
     y: config.bubbleY,
@@ -257,6 +278,7 @@ function createWindow() {
     minHeight: 480,
     skipTaskbar: true,
     hasShadow: false,
+    show: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -265,6 +287,9 @@ function createWindow() {
   });
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  mainWindow.show();
+
   isExpanded = false;
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -295,16 +320,6 @@ function createWindow() {
       const config = loadConfig();
       config.expandedWidth = bounds.width;
       config.expandedHeight = bounds.height;
-      saveConfig(config);
-    }
-  });
-
-  mainWindow.on('moved', () => {
-    if (!isExpanded && !isAnimating) {
-      const bounds = mainWindow.getBounds();
-      const config = loadConfig();
-      config.bubbleX = bounds.x;
-      config.bubbleY = bounds.y;
       saveConfig(config);
     }
   });

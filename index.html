@@ -19,7 +19,7 @@
       user-select: none;
     }
 
-    /* 1. FLOATING BUBBLE (Exact Grammarly 32px Size, Super Crisp, 100% Clickable) */
+    /* 1. FLOATING BUBBLE (Exact Grammarly 32px Size, Draggable + Clickable) */
     #bubble-container {
       width: 100%;
       height: 100%;
@@ -27,9 +27,12 @@
       align-items: center;
       justify-content: center;
       background: transparent !important;
-      cursor: pointer;
-      -webkit-app-region: no-drag; /* Ensures 100% reliable instant clicks */
+      cursor: grab;
     }
+    #bubble-container:active {
+      cursor: grabbing;
+    }
+
     .bubble-inner {
       width: 32px;
       height: 32px;
@@ -195,8 +198,8 @@
 </head>
 <body>
 
-  <!-- 1. FLOATING BUBBLE (Exact Grammarly 32px Round Mascot Badge) -->
-  <div id="bubble-container" title="Click to Open Prompt Cowboy">
+  <!-- 1. FLOATING BUBBLE -->
+  <div id="bubble-container" title="Click to Open Prompt Cowboy (Drag to Reposition)">
     <div class="bubble-inner" id="bubble-click-target">
       <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
     </div>
@@ -270,14 +273,40 @@
       panelHeader.style.display = 'flex';
     }
 
-    // Direct, reliable click handlers (no drag interference)
-    bubbleClickTarget.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.electronAPI.expand();
+    // Smart Mouse Drag & Click Handler (Grammarly algorithm)
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let dragThreshold = 5; // pixels moved before treating as drag instead of click
+    let totalMoved = 0;
+
+    bubbleContainer.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // only left click
+      isDragging = true;
+      startX = e.screenX;
+      startY = e.screenY;
+      totalMoved = 0;
     });
 
-    bubbleContainer.addEventListener('click', () => {
-      window.electronAPI.expand();
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.screenX - startX;
+      const dy = e.screenY - startY;
+      totalMoved += Math.abs(dx) + Math.abs(dy);
+
+      startX = e.screenX;
+      startY = e.screenY;
+
+      window.electronAPI.moveBubble({ dx, dy });
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      // If user barely moved mouse (< 5px), treat it as a click and expand!
+      if (totalMoved < dragThreshold) {
+        window.electronAPI.expand();
+      }
     });
 
     btnMinimize.addEventListener('click', () => {
@@ -292,7 +321,6 @@
       window.electronAPI.snapToCorner();
     });
 
-    // Shortcut modal logic
     shortcutBadge.onclick = () => {
       shortcutModal.style.display = 'flex';
     };
