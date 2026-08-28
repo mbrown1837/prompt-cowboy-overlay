@@ -1,0 +1,22 @@
+{
+  "name": "prompt-cowboy-overlay",
+  "version": "1.0.0",
+  "description": "Native always-on-top desktop overlay for Prompt Cowboy",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win"
+  },
+  "keywords": [
+    "prompt-cowboy",
+    "overlay",
+    "desktop-wrapper",
+    "always-on-top",
+    "hotkey"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}

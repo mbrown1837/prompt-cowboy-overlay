@@ -1,0 +1,380 @@
+const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain } = require('electron');
+const path = require('path');
+const fs = require('fs');
+
+let mainWindow = null;
+let contentView = null;
+let tray = null;
+let isExpanded = false;
+let isAnimating = false;
+
+// Widget Dimensions
+const BUBBLE_WIDTH = 64;
+const BUBBLE_HEIGHT = 64;
+const HEADER_HEIGHT = 42;
+
+const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
+const ICON_PATH = path.join(__dirname, 'PC-pixel-icon.png');
+const DEFAULT_URL = 'https://www.promptcowboy.ai/30c09323-e446-4b58-9e85-7077bf9b9547/prompt/7e6d840c-3cc7-43f5-938c-7c4453fa8d40';
+
+function loadConfig() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+
+  let config = {
+    url: DEFAULT_URL,
+    expandedWidth: 680,
+    expandedHeight: 760,
+    bubbleX: workArea.x + workArea.width - 90,
+    bubbleY: workArea.y + workArea.height - 180,
+    shortcut: 'CommandOrControl+Shift+P',
+  };
+
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+      config = { ...config, ...saved };
+    }
+  } catch (e) {
+    console.error('Config load error:', e);
+  }
+  return config;
+}
+
+function saveConfig(cfg) {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Config save error:', e);
+  }
+}
+
+function calculateExpandedBounds(bubbleX, bubbleY) {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+  const config = loadConfig();
+
+  const expW = config.expandedWidth || 680;
+  const expH = config.expandedHeight || 760;
+
+  const midX = workArea.x + workArea.width / 2;
+  const midY = workArea.y + workArea.height / 2;
+
+  let targetX, targetY;
+
+  if (bubbleX > midX) {
+    targetX = bubbleX - expW + BUBBLE_WIDTH;
+  } else {
+    targetX = bubbleX;
+  }
+
+  if (bubbleY > midY) {
+    targetY = bubbleY - expH + BUBBLE_HEIGHT;
+  } else {
+    targetY = bubbleY;
+  }
+
+  targetX = Math.max(workArea.x + 10, Math.min(targetX, workArea.x + workArea.width - expW - 10));
+  targetY = Math.max(workArea.y + 10, Math.min(targetY, workArea.y + workArea.height - expH - 10));
+
+  return {
+    x: Math.round(targetX),
+    y: Math.round(targetY),
+    width: expW,
+    height: expH,
+  };
+}
+
+function updateContentViewBounds(w, h) {
+  if (contentView && isExpanded) {
+    contentView.setBounds({
+      x: 1,
+      y: HEADER_HEIGHT,
+      width: w - 2,
+      height: h - HEADER_HEIGHT - 1,
+    });
+  }
+}
+
+function animateBounds(startBounds, endBounds, duration = 120, steps = 10, onComplete) {
+  if (isAnimating) return;
+  isAnimating = true;
+
+  const stepTime = duration / steps;
+  let currentStep = 0;
+
+  const interval = setInterval(() => {
+    currentStep++;
+    const t = currentStep / steps;
+    const ease = 1 - Math.pow(1 - t, 3); // Cubic Ease-Out
+
+    const curX = Math.round(startBounds.x + (endBounds.x - startBounds.x) * ease);
+    const curY = Math.round(startBounds.y + (endBounds.y - startBounds.y) * ease);
+    const curW = Math.round(startBounds.width + (endBounds.width - startBounds.width) * ease);
+    const curH = Math.round(startBounds.height + (endBounds.height - startBounds.height) * ease);
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setBounds({ x: curX, y: curY, width: curW, height: curH });
+      updateContentViewBounds(curW, curH);
+    }
+
+    if (currentStep >= steps) {
+      clearInterval(interval);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setBounds(endBounds);
+        updateContentViewBounds(endBounds.width, endBounds.height);
+      }
+      isAnimating = false;
+      if (onComplete) onComplete();
+    }
+  }, stepTime);
+}
+
+function collapseToBubble() {
+  if (!isExpanded || isAnimating || !mainWindow) return;
+
+  const config = loadConfig();
+  const startBounds = mainWindow.getBounds();
+
+  // Save current expanded dimensions
+  config.expandedWidth = startBounds.width;
+  config.expandedHeight = startBounds.height;
+  saveConfig(config);
+
+  const endBounds = {
+    x: config.bubbleX,
+    y: config.bubbleY,
+    width: BUBBLE_WIDTH,
+    height: BUBBLE_HEIGHT,
+  };
+
+  if (contentView) {
+    contentView.setVisible(false);
+  }
+
+  mainWindow.setResizable(false);
+  mainWindow.webContents.send('state-change', 'bubble');
+
+  animateBounds(startBounds, endBounds, 120, 8, () => {
+    isExpanded = false;
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  });
+}
+
+function expandToPanel() {
+  if (isExpanded || isAnimating || !mainWindow) return;
+
+  const config = loadConfig();
+  const startBounds = mainWindow.getBounds();
+  const endBounds = calculateExpandedBounds(config.bubbleX, config.bubbleY);
+
+  mainWindow.webContents.send('state-change', 'expanded');
+
+  animateBounds(startBounds, endBounds, 140, 10, () => {
+    isExpanded = true;
+    mainWindow.setResizable(true);
+    if (contentView) {
+      updateContentViewBounds(endBounds.width, endBounds.height);
+      contentView.setVisible(true);
+      contentView.webContents.focus();
+    }
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    mainWindow.focus();
+  });
+}
+
+function toggleOverlay() {
+  if (isExpanded) {
+    collapseToBubble();
+  } else {
+    expandToPanel();
+  }
+}
+
+function snapToCorner() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+  const config = loadConfig();
+  config.bubbleX = workArea.x + workArea.width - 90;
+  config.bubbleY = workArea.y + workArea.height - 180;
+  saveConfig(config);
+  collapseToBubble();
+}
+
+function registerAppShortcut(shortcutKey) {
+  globalShortcut.unregisterAll();
+  const keyToRegister = shortcutKey || 'CommandOrControl+Shift+P';
+  const success = globalShortcut.register(keyToRegister, () => {
+    toggleOverlay();
+  });
+  return success;
+}
+
+// IPC Handlers
+ipcMain.handle('get-config', () => loadConfig());
+ipcMain.handle('save-config', (_event, cfg) => {
+  saveConfig(cfg);
+  return true;
+});
+ipcMain.handle('set-shortcut', (_event, key) => {
+  const config = loadConfig();
+  const ok = registerAppShortcut(key);
+  if (ok) {
+    config.shortcut = key;
+    saveConfig(config);
+    return { success: true, shortcut: key };
+  }
+  // Re-register previous
+  registerAppShortcut(config.shortcut);
+  return { success: false, error: 'Failed to register shortcut' };
+});
+
+ipcMain.on('collapse-overlay', () => collapseToBubble());
+ipcMain.on('expand-overlay', () => expandToPanel());
+ipcMain.on('toggle-overlay', () => toggleOverlay());
+ipcMain.on('snap-corner', () => snapToCorner());
+ipcMain.on('reload-content', () => {
+  if (contentView) {
+    contentView.webContents.reload();
+  }
+});
+
+function createWindow() {
+  const config = loadConfig();
+
+  mainWindow = new BrowserWindow({
+    x: config.bubbleX,
+    y: config.bubbleY,
+    width: BUBBLE_WIDTH,
+    height: BUBBLE_HEIGHT,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: false,
+    minWidth: 420,
+    minHeight: 480,
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  mainWindow.setAlwaysOnTop(true, 'screen-saver');
+  isExpanded = false;
+
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  contentView = new WebContentsView({
+    webPreferences: {
+      partition: 'persist:promptcowboy',
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  contentView.webContents.loadURL(config.url);
+  contentView.setVisible(false);
+
+  contentView.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'Escape' && input.type === 'keyDown') {
+      collapseToBubble();
+    }
+  });
+
+  mainWindow.contentView.addChildView(contentView);
+
+  // Track manual window resize
+  mainWindow.on('resize', () => {
+    if (isExpanded && !isAnimating) {
+      const bounds = mainWindow.getBounds();
+      updateContentViewBounds(bounds.width, bounds.height);
+      const config = loadConfig();
+      config.expandedWidth = bounds.width;
+      config.expandedHeight = bounds.height;
+      saveConfig(config);
+    }
+  });
+
+  mainWindow.on('moved', () => {
+    if (!isExpanded && !isAnimating) {
+      const bounds = mainWindow.getBounds();
+      const config = loadConfig();
+      config.bubbleX = bounds.x;
+      config.bubbleY = bounds.y;
+      saveConfig(config);
+    }
+  });
+
+  mainWindow.on('close', (e) => {
+    if (!app.isQuitting) {
+      e.preventDefault();
+      collapseToBubble();
+    }
+  });
+}
+
+function createTray() {
+  const icon = fs.existsSync(ICON_PATH)
+    ? nativeImage.createFromPath(ICON_PATH)
+    : nativeImage.createEmpty();
+
+  tray = new Tray(icon);
+  tray.setToolTip('Prompt Cowboy Floating Widget');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Toggle Prompt Cowboy',
+      click: () => toggleOverlay(),
+    },
+    { type: 'separator' },
+    {
+      label: 'Snap Bubble to Bottom-Right Corner',
+      click: () => snapToCorner(),
+    },
+    {
+      label: 'Reload Prompt Cowboy',
+      click: () => {
+        if (contentView) contentView.webContents.reload();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Launch on Windows Startup',
+      type: 'checkbox',
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Exit',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => toggleOverlay());
+}
+
+app.whenReady().then(() => {
+  const config = loadConfig();
+  createWindow();
+  createTray();
+
+  registerAppShortcut(config.shortcut);
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
