@@ -12,6 +12,7 @@ try {
 let mainWindow = null;
 let contentView = null;
 let settingsWindow = null;
+let onboardingWindow = null;
 let tray = null;
 let isExpanded = false;
 let isAnimating = false;
@@ -38,7 +39,10 @@ function loadConfig() {
     bubbleX: workArea.x + workArea.width - 50,
     bubbleY: workArea.y + workArea.height - 120,
     shortcut: 'CommandOrControl+Shift+P',
+    inlineTrigger: '/cowboy',
+    inlineEnabled: true,
     autostart: true,
+    hasSeenOnboarding: false,
   };
 
   try {
@@ -54,7 +58,9 @@ function loadConfig() {
 
 function saveConfig(cfg) {
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8');
+    const current = loadConfig();
+    const updated = { ...current, ...cfg };
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), 'utf-8');
   } catch (e) {
     console.error('Config save error:', e);
   }
@@ -223,9 +229,9 @@ function openSettingsWindow() {
 
   settingsWindow = new BrowserWindow({
     width: 390,
-    height: 440,
+    height: 480,
     x: workArea.x + Math.round((workArea.width - 390) / 2),
-    y: workArea.y + Math.round((workArea.height - 440) / 2),
+    y: workArea.y + Math.round((workArea.height - 480) / 2),
     frame: true,
     title: 'Prompt Cowboy Settings',
     resizable: false,
@@ -244,6 +250,41 @@ function openSettingsWindow() {
 
   settingsWindow.on('closed', () => {
     settingsWindow = null;
+  });
+}
+
+function openOnboardingWindow() {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.focus();
+    return;
+  }
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+
+  onboardingWindow = new BrowserWindow({
+    width: 480,
+    height: 520,
+    x: workArea.x + Math.round((workArea.width - 480) / 2),
+    y: workArea.y + Math.round((workArea.height - 520) / 2),
+    frame: true,
+    title: 'Welcome to Prompt Cowboy',
+    resizable: false,
+    alwaysOnTop: true,
+    icon: fs.existsSync(ICO_PATH) ? ICO_PATH : ICON_PATH,
+    backgroundColor: '#09090b',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  onboardingWindow.setMenuBarVisibility(false);
+  onboardingWindow.loadFile(path.join(__dirname, 'onboarding.html'));
+
+  onboardingWindow.on('closed', () => {
+    onboardingWindow = null;
   });
 }
 
@@ -389,6 +430,7 @@ ipcMain.handle('check-updates', async () => {
 });
 
 ipcMain.on('open-settings', () => openSettingsWindow());
+ipcMain.on('open-onboarding', () => openOnboardingWindow());
 ipcMain.on('collapse-overlay', () => collapseToBubble());
 ipcMain.on('expand-overlay', () => expandToPanel());
 ipcMain.on('toggle-overlay', () => toggleOverlay());
@@ -501,6 +543,13 @@ function createWindow() {
       collapseToBubble();
     }
   });
+
+  // Open onboarding on first run
+  if (!config.hasSeenOnboarding) {
+    setTimeout(() => {
+      openOnboardingWindow();
+    }, 800);
+  }
 }
 
 function createTray() {
@@ -518,8 +567,12 @@ function createTray() {
     },
     { type: 'separator' },
     {
-      label: 'Settings...',
+      label: 'Settings & Preferences...',
       click: () => openSettingsWindow(),
+    },
+    {
+      label: 'Quick Tour & Setup...',
+      click: () => openOnboardingWindow(),
     },
     {
       label: 'Snap to Bottom-Right Corner',
@@ -546,7 +599,7 @@ function createTray() {
           dialog.showMessageBox({
             type: 'info',
             title: 'Update Available',
-            message: `✨ Update ${res.latestVersion} is available! Downloading...`,
+            message: `✨ Update ${res.latestVersion} is available! Downloading in background...`,
             buttons: ['OK'],
           });
         }

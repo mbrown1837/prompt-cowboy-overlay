@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   snapToCorner: () => ipcRenderer.send('snap-corner'),
   reloadContent: () => ipcRenderer.send('reload-content'),
   openSettings: () => ipcRenderer.send('open-settings'),
+  openOnboarding: () => ipcRenderer.send('open-onboarding'),
   setCustomShortcut: (key) => ipcRenderer.invoke('set-shortcut', key),
   toggleAutostart: (enable) => ipcRenderer.invoke('toggle-autostart', enable),
   checkUpdates: () => ipcRenderer.invoke('check-updates'),

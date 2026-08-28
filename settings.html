@@ -55,8 +55,9 @@
     .content {
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      margin: 16px 0;
+      gap: 14px;
+      margin: 14px 0;
+      overflow-y: auto;
     }
 
     .form-group {
@@ -90,7 +91,7 @@
       font-size: 13px;
       color: #e4e4e7;
       cursor: pointer;
-      padding: 4px 0;
+      padding: 2px 0;
     }
     .checkbox-row input {
       accent-color: #f97316;
@@ -101,22 +102,22 @@
 
     .action-row {
       display: flex;
-      gap: 10px;
-      margin-top: 4px;
+      gap: 8px;
+      margin-top: 2px;
     }
     .btn-secondary {
       background: #27272a;
       border: 1px solid #3f3f46;
       color: #d4d4d8;
-      padding: 8px 12px;
+      padding: 7px 10px;
       border-radius: 6px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       flex: 1;
       transition: background 0.15s, color 0.15s;
     }
@@ -128,16 +129,15 @@
     .footer {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 10px;
-      padding-top: 14px;
+      justify-content: space-between;
+      padding-top: 12px;
       border-top: 1px solid #27272a;
     }
     .btn-save {
       background: #f97316;
       border: none;
       color: #ffffff;
-      padding: 8px 20px;
+      padding: 8px 18px;
       border-radius: 6px;
       font-size: 13px;
       font-weight: 600;
@@ -151,7 +151,7 @@
       background: transparent;
       border: none;
       color: #a1a1aa;
-      padding: 8px 14px;
+      padding: 8px 12px;
       border-radius: 6px;
       font-size: 13px;
       cursor: pointer;
@@ -161,28 +161,19 @@
     }
 
     #update-status {
-      font-size: 12px;
+      font-size: 11px;
       text-align: center;
-      min-height: 18px;
+      min-height: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
       font-weight: 500;
-      transition: all 0.2s ease;
     }
-    .status-checking {
-      color: #38bdf8;
-    }
-    .status-latest {
-      color: #22c55e;
-    }
-    .status-available {
-      color: #f97316;
-    }
-    .status-error {
-      color: #ef4444;
-    }
+    .status-checking { color: #38bdf8; }
+    .status-latest { color: #22c55e; }
+    .status-available { color: #f97316; }
+    .status-error { color: #ef4444; }
   </style>
 </head>
 <body>
@@ -190,7 +181,7 @@
   <div class="header">
     <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
     <h2>Prompt Cowboy Settings</h2>
-    <span class="version" id="app-version">v1.1.0</span>
+    <span class="version" id="app-version">v1.2.0</span>
   </div>
 
   <div class="content">
@@ -207,37 +198,52 @@
       </select>
     </div>
 
+    <div class="form-group">
+      <label for="trigger-select">Inline Trigger Keyword (/cowboy):</label>
+      <select id="trigger-select">
+        <option value="/cowboy">/cowboy (Default)</option>
+        <option value="/pc">/pc</option>
+        <option value="/prompt">/prompt</option>
+        <option value="/improve">/improve</option>
+      </select>
+    </div>
+
     <label class="checkbox-row">
       <input type="checkbox" id="autostart-checkbox" />
       <span>Launch automatically when Windows starts</span>
     </label>
 
     <div class="action-row">
-      <button class="btn-secondary" id="btn-snap-corner">📌 Snap to Corner</button>
-      <button class="btn-secondary" id="btn-check-updates">🔄 Check Updates</button>
+      <button class="btn-secondary" id="btn-snap-corner">📌 Snap Corner</button>
+      <button class="btn-secondary" id="btn-onboarding">📖 Quick Tour</button>
+      <button class="btn-secondary" id="btn-check-updates">🔄 Updates</button>
     </div>
     <div id="update-status"></div>
   </div>
 
   <div class="footer">
     <button class="btn-cancel" id="btn-close">Cancel</button>
-    <button class="btn-save" id="btn-save">Save Settings</button>
+    <button class="btn-save" id="btn-save">Save</button>
   </div>
 
   <script>
     const shortcutSelect = document.getElementById('shortcut-select');
+    const triggerSelect = document.getElementById('trigger-select');
     const autostartCheckbox = document.getElementById('autostart-checkbox');
     const btnSnapCorner = document.getElementById('btn-snap-corner');
+    const btnOnboarding = document.getElementById('btn-onboarding');
     const btnCheckUpdates = document.getElementById('btn-check-updates');
     const btnClose = document.getElementById('btn-close');
     const btnSave = document.getElementById('btn-save');
     const updateStatus = document.getElementById('update-status');
     const appVersion = document.getElementById('app-version');
 
-    // Load initial configuration
     window.electronAPI.getConfig().then(cfg => {
       if (cfg.shortcut) {
         shortcutSelect.value = cfg.shortcut;
+      }
+      if (cfg.inlineTrigger) {
+        triggerSelect.value = cfg.inlineTrigger;
       }
       if (cfg.openAtLogin !== undefined) {
         autostartCheckbox.checked = cfg.openAtLogin;
@@ -251,6 +257,11 @@
       window.electronAPI.snapToCorner();
     };
 
+    btnOnboarding.onclick = () => {
+      window.electronAPI.openOnboarding();
+      window.close();
+    };
+
     btnCheckUpdates.onclick = async () => {
       updateStatus.className = 'status-checking';
       updateStatus.innerHTML = '<span>⏳</span> Checking for updates on GitHub...';
@@ -262,27 +273,34 @@
 
         if (res.status === 'latest') {
           updateStatus.className = 'status-latest';
-          updateStatus.innerHTML = `<span>✓</span> You are running the latest version (${res.currentVersion || 'v1.1.0'}).`;
+          updateStatus.innerHTML = `<span>✓</span> Latest version (${res.currentVersion || 'v1.2.0'}).`;
         } else if (res.status === 'update-available') {
           updateStatus.className = 'status-available';
-          updateStatus.innerHTML = `<span>✨</span> Update ${res.latestVersion} available! Downloading...`;
+          updateStatus.innerHTML = `<span>✨</span> Update ${res.latestVersion} available!`;
         } else {
           updateStatus.className = 'status-error';
-          updateStatus.innerHTML = `<span>⚠️</span> ${res.error || 'Could not reach update server.'}`;
+          updateStatus.innerHTML = `<span>⚠️</span> ${res.error || 'Server unreachable.'}`;
         }
       } catch (err) {
         btnCheckUpdates.disabled = false;
         updateStatus.className = 'status-error';
-        updateStatus.innerHTML = '<span>⚠️</span> Unable to check for updates.';
+        updateStatus.innerHTML = '<span>⚠️</span> Unable to check.';
       }
     };
 
     btnSave.onclick = async () => {
       const selectedShortcut = shortcutSelect.value;
+      const selectedTrigger = triggerSelect.value;
       const enableAutostart = autostartCheckbox.checked;
 
       await window.electronAPI.setCustomShortcut(selectedShortcut);
       await window.electronAPI.toggleAutostart(enableAutostart);
+      await window.electronAPI.saveConfig({
+        shortcut: selectedShortcut,
+        inlineTrigger: selectedTrigger,
+        autostart: enableAutostart,
+      });
+
       window.close();
     };
 

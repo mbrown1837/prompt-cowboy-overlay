@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to Prompt Cowboy</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #09090b;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      height: 4px;
+      background: #27272a;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: #f97316;
+      width: 25%;
+      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Steps container */
+    .step-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .step {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .step.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-icon {
+      width: 56px;
+      height: 56px;
+      background: #18181b;
+      border: 2px solid #f97316;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+      margin-bottom: 4px;
+    }
+    .hero-icon img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.3;
+    }
+    p.desc {
+      font-size: 13px;
+      color: #a1a1aa;
+      line-height: 1.5;
+    }
+
+    .feature-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12px;
+      color: #d4d4d8;
+      line-height: 1.4;
+    }
+    .feature-item span.bullet {
+      color: #f97316;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    /* Form inputs */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .form-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e4e4e7;
+    }
+    select, input[type="text"] {
+      background: #18181b;
+      border: 1px solid #3f3f46;
+      color: #ffffff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    select:focus, input[type="text"]:focus {
+      border-color: #f97316;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #e4e4e7;
+      cursor: pointer;
+      padding: 6px 0;
+    }
+    .checkbox-label input {
+      accent-color: #f97316;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .code-pill {
+      background: #27272a;
+      color: #f97316;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    /* Footer Buttons */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 16px;
+      border-top: 1px solid #27272a;
+    }
+    .btn-nav {
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+    }
+    .btn-next {
+      background: #f97316;
+      color: #ffffff;
+      margin-left: auto;
+    }
+    .btn-next:hover {
+      background: #ea580c;
+    }
+    .btn-prev {
+      background: transparent;
+      color: #a1a1aa;
+    }
+    .btn-prev:hover {
+      color: #ffffff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Progress Bar -->
+  <div class="progress-track">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <div class="step-container">
+    <!-- STEP 1: Welcome -->
+    <div class="step active" id="step-1">
+      <div class="hero-icon">
+        <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
+      </div>
+      <h2>Welcome to Prompt Cowboy Desktop!</h2>
+      <p class="desc">Your always-on-top AI prompt engineering companion that floats on any screen and enhances your prompts instantly.</p>
+      
+      <div class="feature-card">
+        <div class="feature-item">
+          <span class="bullet">✦</span>
+          <span><strong>Compact 32px Badge:</strong> Floats subtly in the corner of your screen without taking space.</span>
+        </div>
+        <div class="feature-item">
+          <span class="bullet">✦</span>
+          <span><strong>Drag Anywhere:</strong> Click and hold to place it on any edge or monitor.</span>
+        </div>
+        <div class="feature-item">
+          <span class="bullet">✦</span>
+          <span><strong>Instant Expand:</strong> Click or use hotkey to open Prompt Cowboy in 0ms.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Shortcut Selection -->
+    <div class="step" id="step-2">
+      <h2>1. Choose Your Global Hotkey</h2>
+      <p class="desc">Press this shortcut anywhere in Windows (VS Code, Chrome, Cursor, Slack) to instantly expand or collapse Prompt Cowboy.</p>
+
+      <div class="form-group">
+        <label for="hotkey-select">Preferred Activation Shortcut:</label>
+        <select id="hotkey-select">
+          <option value="CommandOrControl+Shift+P">Ctrl + Shift + P (Default & Recommended)</option>
+          <option value="Alt+Space">Alt + Space (Spotlight / Raycast style)</option>
+          <option value="CommandOrControl+Space">Ctrl + Space</option>
+          <option value="CommandOrControl+Shift+Space">Ctrl + Shift + Space</option>
+          <option value="F1">F1</option>
+          <option value="F4">F4</option>
+          <option value="Alt+P">Alt + P</option>
+        </select>
+      </div>
+
+      <p class="desc" style="font-size: 11px; margin-top: 8px;">You can change this shortcut anytime from the app's Settings.</p>
+    </div>
+
+    <!-- STEP 3: Inline Magic Trigger (/cowboy) -->
+    <div class="step" id="step-3">
+      <h2>2. Inline Magic Trigger</h2>
+      <p class="desc">Type a rough thought in any app followed by your trigger keyword to have Prompt Cowboy polish and replace it at your cursor!</p>
+
+      <div class="feature-card">
+        <p style="font-size:12px; color:#d4d4d8;">Example: <span class="code-pill">write a react button with tailwind /cowboy</span></p>
+        <p style="font-size:11px; color:#a1a1aa;">Prompt Cowboy automatically grabs the rough prompt, enhances it via your paid account in the background, and pastes the final structured prompt directly!</p>
+      </div>
+
+      <div class="form-group">
+        <label for="trigger-keyword">Inline Trigger Keyword:</label>
+        <select id="trigger-keyword">
+          <option value="/cowboy">/cowboy (Default)</option>
+          <option value="/pc">/pc</option>
+          <option value="/prompt">/prompt</option>
+          <option value="/improve">/improve</option>
+        </select>
+      </div>
+
+      <label class="checkbox-label">
+        <input type="checkbox" id="inline-enabled" checked />
+        <span>Enable inline text expansion & auto-replacement</span>
+      </label>
+    </div>
+
+    <!-- STEP 4: Startup & Finish -->
+    <div class="step" id="step-4">
+      <h2>3. Ready to Roll! 🤠</h2>
+      <p class="desc">Configure startup behavior and complete your setup.</p>
+
+      <div class="feature-card" style="gap: 12px;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autostart-option" checked />
+          <span>Launch Prompt Cowboy automatically on Windows startup</span>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="remember-pos" checked />
+          <span>Always remember my widget position across restarts</span>
+        </label>
+      </div>
+
+      <p class="desc" style="font-size: 12px; color: #22c55e;">✓ Your persistent Prompt Cowboy session is ready!</p>
+    </div>
+  </div>
+
+  <!-- Navigation Footer -->
+  <div class="footer">
+    <button class="btn-nav btn-prev" id="btn-prev" style="display: none;">Back</button>
+    <button class="btn-nav btn-next" id="btn-next">Next →</button>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    const progressFill = document.getElementById('progress-fill');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+
+    const hotkeySelect = document.getElementById('hotkey-select');
+    const triggerKeyword = document.getElementById('trigger-keyword');
+    const inlineEnabled = document.getElementById('inline-enabled');
+    const autostartOption = document.getElementById('autostart-option');
+
+    function updateStep() {
+      // Update progress bar
+      progressFill.style.width = (currentStep / totalSteps) * 100 + '%';
+
+      // Update step visibility
+      for (let i = 1; i <= totalSteps; i++) {
+        const el = document.getElementById('step-' + i);
+        if (i === currentStep) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      }
+
+      // Update button labels
+      btnPrev.style.display = currentStep > 1 ? 'block' : 'none';
+      if (currentStep === totalSteps) {
+        btnNext.textContent = 'Finish & Start Prompt Cowboy 🚀';
+      } else {
+        btnNext.textContent = 'Next →';
+      }
+    }
+
+    btnNext.onclick = async () => {
+      if (currentStep < totalSteps) {
+        currentStep++;
+        updateStep();
+      } else {
+        // Save preferences
+        const shortcut = hotkeySelect.value;
+        const trigger = triggerKeyword.value;
+        const enableInline = inlineEnabled.checked;
+        const autostart = autostartOption.checked;
+
+        await window.electronAPI.setCustomShortcut(shortcut);
+        await window.electronAPI.toggleAutostart(autostart);
+        await window.electronAPI.saveConfig({
+          shortcut,
+          inlineTrigger: trigger,
+          inlineEnabled: enableInline,
+          autostart,
+          hasSeenOnboarding: true
+        });
+
+        window.close();
+      }
+    };
+
+    btnPrev.onclick = () => {
+      if (currentStep > 1) {
+        currentStep--;
+        updateStep();
+      }
+    };
+  </script>
+</body>
+</html>
