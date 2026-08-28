@@ -1,6 +1,7 @@
-const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
 let autoUpdater = null;
 try {
   autoUpdater = require('electron-updater').autoUpdater;
@@ -30,6 +31,7 @@ function loadConfig() {
 
   let config = {
     url: DEFAULT_URL,
+    lastUrl: DEFAULT_URL,
     expandedWidth: 680,
     expandedHeight: 760,
     bubbleX: workArea.x + workArea.width - 50,
@@ -227,30 +229,44 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for update...');
+  });
+
   autoUpdater.on('update-available', (info) => {
     dialog.showMessageBox({
       type: 'info',
       title: 'Update Available',
-      message: `Prompt Cowboy version ${info.version} is available. Downloading in the background...`,
+      message: `Prompt Cowboy version ${info.version} is available. Downloading automatically...`,
       buttons: ['OK'],
     });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('App is up to date.');
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     dialog.showMessageBox({
       type: 'info',
-      title: 'Update Ready',
-      message: `Prompt Cowboy version ${info.version} has been downloaded. Restart to apply update.`,
-      buttons: ['Restart Now', 'Later'],
+      title: 'Update Ready to Install',
+      message: `Prompt Cowboy version ${info.version} has been downloaded. Restart now to apply the update?`,
+      buttons: ['Restart and Update', 'Later'],
     }).then((res) => {
       if (res.response === 0) {
-        autoUpdater.quitAndInstall();
+        autoUpdater.quitAndInstall(false, true);
       }
     });
   });
 
+  autoUpdater.on('error', (err) => {
+    console.log('Auto-updater error:', err);
+  });
+
   if (app.isPackaged) {
-    autoUpdater.checkForUpdatesAndNotify().catch((e) => console.log('Update check error:', e));
+    setTimeout(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch((e) => console.log('Update check error:', e));
+    }, 3000);
   }
 }
 
@@ -291,16 +307,16 @@ ipcMain.handle('check-updates', async () => {
     dialog.showMessageBox({
       type: 'info',
       title: 'Check for Updates',
-      message: 'You are running the latest version of Prompt Cowboy (v1.0.0).',
+      message: `You are running Prompt Cowboy v${app.getVersion()}.`,
       buttons: ['OK'],
     });
-    return { status: 'latest' };
+    return { status: 'checked' };
   }
   try {
     const res = await autoUpdater.checkForUpdates();
     return { status: 'checked', res };
   } catch (e) {
-    dialog.showErrorBox('Update Check Failed', e.message || 'Unable to reach GitHub updates.');
+    dialog.showErrorBox('Update Check Failed', e.message || 'Unable to check for updates.');
     return { status: 'error', error: e.message };
   }
 });
@@ -366,16 +382,35 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
+  // 100% Persistent Partition for Cookies, Storage, & Auth
+  const ses = session.fromPartition('persist:promptcowboy', { cache: true });
+
   contentView = new WebContentsView({
     webPreferences: {
-      partition: 'persist:promptcowboy',
+      session: ses,
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
 
-  contentView.webContents.loadURL(config.url);
+  // Load the exact last URL where the user left off
+  const urlToLoad = config.lastUrl || config.url || DEFAULT_URL;
+  contentView.webContents.loadURL(urlToLoad);
   contentView.setVisible(false);
+
+  // Track and remember user's navigation position (homepage, prompt studio, library, etc.)
+  function saveCurrentURL(navUrl) {
+    if (navUrl && !navUrl.startsWith('about:blank') && !navUrl.startsWith('data:')) {
+      const cfg = loadConfig();
+      cfg.lastUrl = navUrl;
+      saveConfig(cfg);
+      // Flush cookies to disk immediately so auth token is never lost
+      ses.cookies.flushStore().catch(() => {});
+    }
+  }
+
+  contentView.webContents.on('did-navigate', (_event, url) => saveCurrentURL(url));
+  contentView.webContents.on('did-navigate-in-page', (_event, url) => saveCurrentURL(url));
 
   contentView.webContents.on('before-input-event', (event, input) => {
     if (input.key === 'Escape' && input.type === 'keyDown') {
@@ -389,10 +424,10 @@ function createWindow() {
     if (isExpanded && !isAnimating) {
       const bounds = mainWindow.getBounds();
       updateContentViewBounds(bounds.width, bounds.height);
-      const config = loadConfig();
-      config.expandedWidth = bounds.width;
-      config.expandedHeight = bounds.height;
-      saveConfig(config);
+      const cfg = loadConfig();
+      cfg.expandedWidth = bounds.width;
+      cfg.expandedHeight = bounds.height;
+      saveConfig(cfg);
     }
   });
 
@@ -410,7 +445,7 @@ function createTray() {
     : (fs.existsSync(ICON_PATH) ? nativeImage.createFromPath(ICON_PATH) : nativeImage.createEmpty());
 
   tray = new Tray(icon);
-  tray.setToolTip('Prompt Cowboy Floating Widget');
+  tray.setToolTip(`Prompt Cowboy v${app.getVersion()}`);
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -437,7 +472,7 @@ function createTray() {
           dialog.showMessageBox({
             type: 'info',
             title: 'Prompt Cowboy Updates',
-            message: 'You are using Prompt Cowboy v1.0.0 (Latest Release).',
+            message: `You are running Prompt Cowboy v${app.getVersion()}.`,
             buttons: ['OK'],
           });
         }
@@ -450,9 +485,9 @@ function createTray() {
       checked: app.getLoginItemSettings().openAtLogin,
       click: (item) => {
         app.setLoginItemSettings({ openAtLogin: item.checked });
-        const config = loadConfig();
-        config.autostart = item.checked;
-        saveConfig(config);
+        const cfg = loadConfig();
+        cfg.autostart = item.checked;
+        saveConfig(cfg);
       },
     },
     { type: 'separator' },
@@ -460,7 +495,13 @@ function createTray() {
       label: 'Exit',
       click: () => {
         app.isQuitting = true;
-        app.quit();
+        // Flush cookies on exit
+        const ses = session.fromPartition('persist:promptcowboy');
+        ses.cookies.flushStore().then(() => {
+          app.quit();
+        }).catch(() => {
+          app.quit();
+        });
       },
     },
   ]);
