@@ -8,9 +8,9 @@ let tray = null;
 let isExpanded = false;
 let isAnimating = false;
 
-// Widget Dimensions
-const BUBBLE_WIDTH = 64;
-const BUBBLE_HEIGHT = 64;
+// Compact Widget Dimensions
+const BUBBLE_WIDTH = 48;
+const BUBBLE_HEIGHT = 48;
 const HEADER_HEIGHT = 42;
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
@@ -25,8 +25,8 @@ function loadConfig() {
     url: DEFAULT_URL,
     expandedWidth: 680,
     expandedHeight: 760,
-    bubbleX: workArea.x + workArea.width - 90,
-    bubbleY: workArea.y + workArea.height - 180,
+    bubbleX: workArea.x + workArea.width - 70,
+    bubbleY: workArea.y + workArea.height - 150,
     shortcut: 'CommandOrControl+Shift+P',
   };
 
@@ -136,7 +136,6 @@ function collapseToBubble() {
   const config = loadConfig();
   const startBounds = mainWindow.getBounds();
 
-  // Save current expanded dimensions
   config.expandedWidth = startBounds.width;
   config.expandedHeight = startBounds.height;
   saveConfig(config);
@@ -195,8 +194,8 @@ function snapToCorner() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { workArea } = primaryDisplay;
   const config = loadConfig();
-  config.bubbleX = workArea.x + workArea.width - 90;
-  config.bubbleY = workArea.y + workArea.height - 180;
+  config.bubbleX = workArea.x + workArea.width - 70;
+  config.bubbleY = workArea.y + workArea.height - 150;
   saveConfig(config);
   collapseToBubble();
 }
@@ -224,7 +223,6 @@ ipcMain.handle('set-shortcut', (_event, key) => {
     saveConfig(config);
     return { success: true, shortcut: key };
   }
-  // Re-register previous
   registerAppShortcut(config.shortcut);
   return { success: false, error: 'Failed to register shortcut' };
 });
@@ -286,7 +284,6 @@ function createWindow() {
 
   mainWindow.contentView.addChildView(contentView);
 
-  // Track manual window resize
   mainWindow.on('resize', () => {
     if (isExpanded && !isAnimating) {
       const bounds = mainWindow.getBounds();

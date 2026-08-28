@@ -13,70 +13,49 @@
     html, body {
       width: 100%;
       height: 100%;
-      background: transparent;
+      background: transparent !important;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
 
-    /* 1. FLOATING HOVER BUBBLE (Exact Mascot Badge) */
+    /* 1. FLOATING HOVER BUBBLE (Compact, Clean, Zero Bounding Box) */
     #bubble-container {
-      width: 64px;
-      height: 64px;
+      width: 48px;
+      height: 48px;
       position: absolute;
       inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: transparent !important;
       cursor: pointer;
+      -webkit-app-region: drag;
     }
     .bubble-inner {
-      width: 54px;
-      height: 54px;
-      background: #121214;
-      border: 2px solid #f97316;
+      width: 44px;
+      height: 44px;
+      background: #09090b;
+      border: 1.5px solid #f97316;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 20px rgba(249, 115, 22, 0.5), 0 0 10px rgba(249, 115, 22, 0.25);
-      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+      box-shadow: 0 2px 10px rgba(249, 115, 22, 0.45);
+      transition: opacity 0.15s ease, box-shadow 0.15s ease;
       position: relative;
       overflow: hidden;
     }
     .bubble-inner:hover {
-      transform: scale(1.1);
-      box-shadow: 0 8px 30px rgba(249, 115, 22, 0.8), 0 0 15px rgba(249, 115, 22, 0.4);
+      box-shadow: 0 3px 14px rgba(249, 115, 22, 0.7);
+      opacity: 0.95;
     }
     .bubble-inner img {
-      width: 44px;
-      height: 44px;
+      width: 32px;
+      height: 32px;
       object-fit: contain;
       pointer-events: none;
       image-rendering: pixelated;
-    }
-    /* Dotted Drag Grip Handle */
-    .drag-grip {
-      position: absolute;
-      left: -8px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      padding: 4px 2px;
-      background: #27272a;
-      border: 1px solid #3f3f46;
-      border-radius: 4px;
-      cursor: grab;
-      -webkit-app-region: drag;
-      z-index: 10;
-    }
-    .drag-grip span {
-      width: 3px;
-      height: 3px;
-      background: #a1a1aa;
-      border-radius: 50%;
     }
 
     /* 2. EXPANDED TOP HEADER */
@@ -104,8 +83,8 @@
       color: #fafafa;
     }
     .panel-title img {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       object-fit: contain;
       image-rendering: pixelated;
     }
@@ -148,7 +127,7 @@
       color: #fafafa;
     }
 
-    /* Modal for Shortcut Setting */
+    /* Shortcut Modal */
     #shortcut-modal {
       display: none;
       position: fixed;
@@ -214,11 +193,8 @@
 </head>
 <body>
 
-  <!-- 1. FLOATING BUBBLE (Grammarly / Pieces style) -->
+  <!-- 1. FLOATING BUBBLE (Compact 44px Circle, Pure Clean Mascot) -->
   <div id="bubble-container" title="Click to Open Prompt Cowboy">
-    <div class="drag-grip" title="Drag to Reposition Widget">
-      <span></span><span></span><span></span>
-    </div>
     <div class="bubble-inner" id="bubble-click-target">
       <img src="./PC-pixel-icon.png" alt="Prompt Cowboy Mascot" />
     </div>
@@ -292,7 +268,7 @@
       panelHeader.style.display = 'flex';
     }
 
-    bubbleClickTarget.onclick = () => {
+    bubbleClickTarget.onclick = (e) => {
       window.electronAPI.expand();
     };
 
