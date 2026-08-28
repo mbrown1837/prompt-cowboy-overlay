@@ -8,9 +8,9 @@ let tray = null;
 let isExpanded = false;
 let isAnimating = false;
 
-// Compact Widget Dimensions
-const BUBBLE_WIDTH = 48;
-const BUBBLE_HEIGHT = 48;
+// Compact Round Bubble Dimensions
+const BUBBLE_WIDTH = 52;
+const BUBBLE_HEIGHT = 52;
 const HEADER_HEIGHT = 42;
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
@@ -25,8 +25,8 @@ function loadConfig() {
     url: DEFAULT_URL,
     expandedWidth: 680,
     expandedHeight: 760,
-    bubbleX: workArea.x + workArea.width - 70,
-    bubbleY: workArea.y + workArea.height - 150,
+    bubbleX: workArea.x + workArea.width - 65,
+    bubbleY: workArea.y + workArea.height - 140,
     shortcut: 'CommandOrControl+Shift+P',
   };
 
@@ -106,7 +106,7 @@ function animateBounds(startBounds, endBounds, duration = 120, steps = 10, onCom
   const interval = setInterval(() => {
     currentStep++;
     const t = currentStep / steps;
-    const ease = 1 - Math.pow(1 - t, 3); // Cubic Ease-Out
+    const ease = 1 - Math.pow(1 - t, 3);
 
     const curX = Math.round(startBounds.x + (endBounds.x - startBounds.x) * ease);
     const curY = Math.round(startBounds.y + (endBounds.y - startBounds.y) * ease);
@@ -194,8 +194,8 @@ function snapToCorner() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { workArea } = primaryDisplay;
   const config = loadConfig();
-  config.bubbleX = workArea.x + workArea.width - 70;
-  config.bubbleY = workArea.y + workArea.height - 150;
+  config.bubbleX = workArea.x + workArea.width - 65;
+  config.bubbleY = workArea.y + workArea.height - 140;
   saveConfig(config);
   collapseToBubble();
 }

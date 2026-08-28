@@ -14,45 +14,46 @@
       width: 100%;
       height: 100%;
       background: transparent !important;
-      overflow: hidden;
+      overflow: visible !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
 
-    /* 1. FLOATING HOVER BUBBLE (Compact, Clean, Zero Bounding Box) */
+    /* 1. FLOATING HOVER BUBBLE (Perfect 38px Round Circle, Zero Box/Clip Artifacts) */
     #bubble-container {
-      width: 48px;
-      height: 48px;
-      position: absolute;
-      inset: 0;
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       background: transparent !important;
       cursor: pointer;
       -webkit-app-region: drag;
+      overflow: visible !important;
     }
     .bubble-inner {
-      width: 44px;
-      height: 44px;
+      width: 38px;
+      height: 38px;
       background: #09090b;
       border: 1.5px solid #f97316;
-      border-radius: 50%;
+      border-radius: 50% !important;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 10px rgba(249, 115, 22, 0.45);
-      transition: opacity 0.15s ease, box-shadow 0.15s ease;
+      /* Clean subtle round glow strictly within the 52px window bounds */
+      box-shadow: 0 0 6px rgba(249, 115, 22, 0.45);
+      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
       position: relative;
-      overflow: hidden;
+      overflow: hidden !important;
+      flex-shrink: 0;
     }
     .bubble-inner:hover {
-      box-shadow: 0 3px 14px rgba(249, 115, 22, 0.7);
-      opacity: 0.95;
+      transform: scale(1.08);
+      box-shadow: 0 0 10px rgba(249, 115, 22, 0.75);
     }
     .bubble-inner img {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       object-fit: contain;
       pointer-events: none;
       image-rendering: pixelated;
@@ -193,7 +194,7 @@
 </head>
 <body>
 
-  <!-- 1. FLOATING BUBBLE (Compact 44px Circle, Pure Clean Mascot) -->
+  <!-- 1. FLOATING BUBBLE (Pure Round 38px Mascot Badge) -->
   <div id="bubble-container" title="Click to Open Prompt Cowboy">
     <div class="bubble-inner" id="bubble-click-target">
       <img src="./PC-pixel-icon.png" alt="Prompt Cowboy Mascot" />
