@@ -14,12 +14,12 @@
       width: 100%;
       height: 100%;
       background: transparent !important;
-      overflow: visible !important;
+      overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       user-select: none;
     }
 
-    /* 1. FLOATING HOVER BUBBLE (Perfect 38px Round Circle, Zero Box/Clip Artifacts) */
+    /* 1. FLOATING BUBBLE (Exact Grammarly 32px Size, Super Crisp, 100% Clickable) */
     #bubble-container {
       width: 100%;
       height: 100%;
@@ -28,35 +28,36 @@
       justify-content: center;
       background: transparent !important;
       cursor: pointer;
-      -webkit-app-region: drag;
-      overflow: visible !important;
+      -webkit-app-region: no-drag; /* Ensures 100% reliable instant clicks */
     }
     .bubble-inner {
-      width: 38px;
-      height: 38px;
+      width: 32px;
+      height: 32px;
       background: #09090b;
       border: 1.5px solid #f97316;
-      border-radius: 50% !important;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      /* Clean subtle round glow strictly within the 52px window bounds */
-      box-shadow: 0 0 6px rgba(249, 115, 22, 0.45);
-      transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease;
+      box-shadow: 0 2px 8px rgba(249, 115, 22, 0.45);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
       position: relative;
-      overflow: hidden !important;
-      flex-shrink: 0;
+      cursor: pointer;
     }
     .bubble-inner:hover {
-      transform: scale(1.08);
-      box-shadow: 0 0 10px rgba(249, 115, 22, 0.75);
+      transform: scale(1.12);
+      box-shadow: 0 3px 12px rgba(249, 115, 22, 0.75);
+    }
+    .bubble-inner:active {
+      transform: scale(0.95);
     }
     .bubble-inner img {
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
       object-fit: contain;
       pointer-events: none;
-      image-rendering: pixelated;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
     }
 
     /* 2. EXPANDED TOP HEADER */
@@ -87,7 +88,7 @@
       width: 20px;
       height: 20px;
       object-fit: contain;
-      image-rendering: pixelated;
+      image-rendering: crisp-edges;
     }
     .panel-title .badge {
       font-size: 10px;
@@ -194,17 +195,17 @@
 </head>
 <body>
 
-  <!-- 1. FLOATING BUBBLE (Pure Round 38px Mascot Badge) -->
+  <!-- 1. FLOATING BUBBLE (Exact Grammarly 32px Round Mascot Badge) -->
   <div id="bubble-container" title="Click to Open Prompt Cowboy">
     <div class="bubble-inner" id="bubble-click-target">
-      <img src="./PC-pixel-icon.png" alt="Prompt Cowboy Mascot" />
+      <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
     </div>
   </div>
 
   <!-- 2. EXPANDED TITLEBAR -->
   <div id="panel-header">
     <div class="panel-title">
-      <img src="./PC-pixel-icon.png" alt="Prompt Cowboy Mascot" />
+      <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
       <span>Prompt Cowboy</span>
       <span class="badge" id="shortcut-badge" title="Click to Change Shortcut">Ctrl+Shift+P ⚙</span>
     </div>
@@ -269,21 +270,27 @@
       panelHeader.style.display = 'flex';
     }
 
-    bubbleClickTarget.onclick = (e) => {
+    // Direct, reliable click handlers (no drag interference)
+    bubbleClickTarget.addEventListener('click', (e) => {
+      e.stopPropagation();
       window.electronAPI.expand();
-    };
+    });
 
-    btnMinimize.onclick = () => {
+    bubbleContainer.addEventListener('click', () => {
+      window.electronAPI.expand();
+    });
+
+    btnMinimize.addEventListener('click', () => {
       window.electronAPI.collapse();
-    };
+    });
 
-    btnReload.onclick = () => {
+    btnReload.addEventListener('click', () => {
       window.electronAPI.reloadContent();
-    };
+    });
 
-    btnSnap.onclick = () => {
+    btnSnap.addEventListener('click', () => {
       window.electronAPI.snapToCorner();
-    };
+    });
 
     // Shortcut modal logic
     shortcutBadge.onclick = () => {

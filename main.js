@@ -8,9 +8,9 @@ let tray = null;
 let isExpanded = false;
 let isAnimating = false;
 
-// Compact Round Bubble Dimensions
-const BUBBLE_WIDTH = 52;
-const BUBBLE_HEIGHT = 52;
+// Exact Grammarly Size (36px total window, 32px inner circle)
+const BUBBLE_WIDTH = 36;
+const BUBBLE_HEIGHT = 36;
 const HEADER_HEIGHT = 42;
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
@@ -25,8 +25,8 @@ function loadConfig() {
     url: DEFAULT_URL,
     expandedWidth: 680,
     expandedHeight: 760,
-    bubbleX: workArea.x + workArea.width - 65,
-    bubbleY: workArea.y + workArea.height - 140,
+    bubbleX: workArea.x + workArea.width - 50,
+    bubbleY: workArea.y + workArea.height - 120,
     shortcut: 'CommandOrControl+Shift+P',
   };
 
@@ -194,8 +194,8 @@ function snapToCorner() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { workArea } = primaryDisplay;
   const config = loadConfig();
-  config.bubbleX = workArea.x + workArea.width - 65;
-  config.bubbleY = workArea.y + workArea.height - 140;
+  config.bubbleX = workArea.x + workArea.width - 50;
+  config.bubbleY = workArea.y + workArea.height - 120;
   saveConfig(config);
   collapseToBubble();
 }
@@ -203,10 +203,14 @@ function snapToCorner() {
 function registerAppShortcut(shortcutKey) {
   globalShortcut.unregisterAll();
   const keyToRegister = shortcutKey || 'CommandOrControl+Shift+P';
-  const success = globalShortcut.register(keyToRegister, () => {
-    toggleOverlay();
-  });
-  return success;
+  try {
+    const success = globalShortcut.register(keyToRegister, () => {
+      toggleOverlay();
+    });
+    return success;
+  } catch (err) {
+    return false;
+  }
 }
 
 // IPC Handlers
