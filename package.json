@@ -1,22 +1,76 @@
 {
   "name": "prompt-cowboy-overlay",
+  "productName": "Prompt Cowboy",
   "version": "1.0.0",
-  "description": "Native always-on-top desktop overlay for Prompt Cowboy",
+  "description": "Modern Floating Desktop Overlay for Prompt Cowboy",
   "main": "main.js",
+  "author": {
+    "name": "Prompt Cowboy",
+    "email": "support@promptcowboy.ai"
+  },
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win"
+    "build:win": "electron-builder --win",
+    "build:installer": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.promptcowboy.overlay",
+    "productName": "Prompt Cowboy",
+    "copyright": "Copyright © 2026 Prompt Cowboy",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Prompt Cowboy",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mbrown1837",
+        "repo": "prompt-cowboy-overlay"
+      }
+    ]
   },
   "keywords": [
     "prompt-cowboy",
     "overlay",
-    "desktop-wrapper",
-    "always-on-top",
-    "hotkey"
+    "grammarly",
+    "floating-widget",
+    "always-on-top"
   ],
-  "author": "",
   "license": "MIT",
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
   }
 }

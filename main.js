@@ -1,6 +1,12 @@
-const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+} catch (e) {
+  console.log('electron-updater not available in dev mode:', e);
+}
 
 let mainWindow = null;
 let contentView = null;
@@ -8,13 +14,14 @@ let tray = null;
 let isExpanded = false;
 let isAnimating = false;
 
-// Compact Round Bubble Dimensions
+// Compact Mascot Dimensions
 const BUBBLE_WIDTH = 36;
 const BUBBLE_HEIGHT = 36;
 const HEADER_HEIGHT = 42;
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
 const ICON_PATH = path.join(__dirname, 'PC-pixel-icon.png');
+const ICO_PATH = path.join(__dirname, 'icon.ico');
 const DEFAULT_URL = 'https://www.promptcowboy.ai/30c09323-e446-4b58-9e85-7077bf9b9547/prompt/7e6d840c-3cc7-43f5-938c-7c4453fa8d40';
 
 function loadConfig() {
@@ -28,6 +35,7 @@ function loadConfig() {
     bubbleX: workArea.x + workArea.width - 50,
     bubbleY: workArea.y + workArea.height - 120,
     shortcut: 'CommandOrControl+Shift+P',
+    autostart: true,
   };
 
   try {
@@ -214,12 +222,50 @@ function registerAppShortcut(shortcutKey) {
   }
 }
 
+function setupAutoUpdater() {
+  if (!autoUpdater) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Available',
+      message: `Prompt Cowboy version ${info.version} is available. Downloading in the background...`,
+      buttons: ['OK'],
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: `Prompt Cowboy version ${info.version} has been downloaded. Restart to apply update.`,
+      buttons: ['Restart Now', 'Later'],
+    }).then((res) => {
+      if (res.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify().catch((e) => console.log('Update check error:', e));
+  }
+}
+
 // IPC Handlers
-ipcMain.handle('get-config', () => loadConfig());
+ipcMain.handle('get-config', () => {
+  const cfg = loadConfig();
+  cfg.openAtLogin = app.getLoginItemSettings().openAtLogin;
+  return cfg;
+});
+
 ipcMain.handle('save-config', (_event, cfg) => {
   saveConfig(cfg);
   return true;
 });
+
 ipcMain.handle('set-shortcut', (_event, key) => {
   const config = loadConfig();
   const ok = registerAppShortcut(key);
@@ -232,6 +278,33 @@ ipcMain.handle('set-shortcut', (_event, key) => {
   return { success: false, error: 'Failed to register shortcut' };
 });
 
+ipcMain.handle('toggle-autostart', (_event, enable) => {
+  app.setLoginItemSettings({ openAtLogin: enable });
+  const config = loadConfig();
+  config.autostart = enable;
+  saveConfig(config);
+  return { success: true, autostart: enable };
+});
+
+ipcMain.handle('check-updates', async () => {
+  if (!autoUpdater || !app.isPackaged) {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Check for Updates',
+      message: 'You are running the latest version of Prompt Cowboy (v1.0.0).',
+      buttons: ['OK'],
+    });
+    return { status: 'latest' };
+  }
+  try {
+    const res = await autoUpdater.checkForUpdates();
+    return { status: 'checked', res };
+  } catch (e) {
+    dialog.showErrorBox('Update Check Failed', e.message || 'Unable to reach GitHub updates.');
+    return { status: 'error', error: e.message };
+  }
+});
+
 ipcMain.on('collapse-overlay', () => collapseToBubble());
 ipcMain.on('expand-overlay', () => expandToPanel());
 ipcMain.on('toggle-overlay', () => toggleOverlay());
@@ -242,7 +315,6 @@ ipcMain.on('reload-content', () => {
   }
 });
 
-// Dynamic Bubble Drag-to-Position IPC
 ipcMain.on('move-bubble', (_event, { dx, dy }) => {
   if (!isExpanded && mainWindow && !mainWindow.isDestroyed()) {
     const bounds = mainWindow.getBounds();
@@ -264,7 +336,6 @@ ipcMain.on('move-bubble', (_event, { dx, dy }) => {
 function createWindow() {
   const config = loadConfig();
 
-  // Create and immediately show & elevate on screen
   mainWindow = new BrowserWindow({
     x: config.bubbleX,
     y: config.bubbleY,
@@ -279,6 +350,7 @@ function createWindow() {
     skipTaskbar: true,
     hasShadow: false,
     show: true,
+    icon: fs.existsSync(ICO_PATH) ? ICO_PATH : ICON_PATH,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -333,27 +405,42 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = fs.existsSync(ICON_PATH)
-    ? nativeImage.createFromPath(ICON_PATH)
-    : nativeImage.createEmpty();
+  const icon = fs.existsSync(ICO_PATH)
+    ? nativeImage.createFromPath(ICO_PATH)
+    : (fs.existsSync(ICON_PATH) ? nativeImage.createFromPath(ICON_PATH) : nativeImage.createEmpty());
 
   tray = new Tray(icon);
   tray.setToolTip('Prompt Cowboy Floating Widget');
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Toggle Prompt Cowboy',
+      label: 'Toggle Prompt Cowboy (HotKey)',
       click: () => toggleOverlay(),
     },
     { type: 'separator' },
     {
-      label: 'Snap Bubble to Bottom-Right Corner',
+      label: 'Snap to Bottom-Right Corner',
       click: () => snapToCorner(),
     },
     {
       label: 'Reload Prompt Cowboy',
       click: () => {
         if (contentView) contentView.webContents.reload();
+      },
+    },
+    {
+      label: 'Check for Updates...',
+      click: () => {
+        if (autoUpdater && app.isPackaged) {
+          autoUpdater.checkForUpdatesAndNotify();
+        } else {
+          dialog.showMessageBox({
+            type: 'info',
+            title: 'Prompt Cowboy Updates',
+            message: 'You are using Prompt Cowboy v1.0.0 (Latest Release).',
+            buttons: ['OK'],
+          });
+        }
       },
     },
     { type: 'separator' },
@@ -363,6 +450,9 @@ function createTray() {
       checked: app.getLoginItemSettings().openAtLogin,
       click: (item) => {
         app.setLoginItemSettings({ openAtLogin: item.checked });
+        const config = loadConfig();
+        config.autostart = item.checked;
+        saveConfig(config);
       },
     },
     { type: 'separator' },
@@ -383,6 +473,7 @@ app.whenReady().then(() => {
   const config = loadConfig();
   createWindow();
   createTray();
+  setupAutoUpdater();
 
   registerAppShortcut(config.shortcut);
 

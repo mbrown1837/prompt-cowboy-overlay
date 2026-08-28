@@ -19,7 +19,7 @@
       user-select: none;
     }
 
-    /* 1. FLOATING BUBBLE (Exact Grammarly 32px Size, Draggable + Clickable) */
+    /* 1. FLOATING BUBBLE (Grammarly 32px Size) */
     #bubble-container {
       width: 100%;
       height: 100%;
@@ -132,8 +132,8 @@
       color: #fafafa;
     }
 
-    /* Shortcut Modal */
-    #shortcut-modal {
+    /* Modern Settings Modal */
+    #settings-modal {
       display: none;
       position: fixed;
       inset: 0;
@@ -146,25 +146,39 @@
     .modal-card {
       background: #18181b;
       border: 1px solid #3f3f46;
-      border-radius: 12px;
-      padding: 20px;
-      width: 320px;
+      border-radius: 14px;
+      padding: 22px;
+      width: 360px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
       color: #f4f4f5;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
     }
-    .modal-card h3 {
-      font-size: 14px;
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 {
+      font-size: 15px;
       font-weight: 600;
       color: #f97316;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
-    .modal-card p {
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group label {
       font-size: 12px;
-      color: #a1a1aa;
-      line-height: 1.4;
+      font-weight: 500;
+      color: #e4e4e7;
     }
-    .modal-card select {
+    .form-group select {
       background: #27272a;
       border: 1px solid #3f3f46;
       color: #fafafa;
@@ -173,24 +187,43 @@
       font-size: 12px;
       outline: none;
     }
-    .modal-card .modal-actions {
+    .checkbox-row {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
       gap: 8px;
+      font-size: 12px;
+      color: #d4d4d8;
+      cursor: pointer;
+    }
+    .checkbox-row input {
+      accent-color: #f97316;
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+    }
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
     }
     .btn-action {
-      padding: 6px 12px;
+      padding: 6px 14px;
       border-radius: 6px;
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
       border: none;
+      transition: opacity 0.15s;
+    }
+    .btn-action:hover {
+      opacity: 0.9;
     }
     .btn-save {
       background: #f97316;
       color: #ffffff;
     }
-    .btn-cancel {
+    .btn-secondary {
       background: #27272a;
       color: #a1a1aa;
     }
@@ -210,7 +243,7 @@
     <div class="panel-title">
       <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
       <span>Prompt Cowboy</span>
-      <span class="badge" id="shortcut-badge" title="Click to Change Shortcut">Ctrl+Shift+P ⚙</span>
+      <span class="badge" id="settings-badge" title="Click to Open Settings">Settings ⚙</span>
     </div>
     <div class="panel-controls">
       <button class="btn-ctrl" id="btn-snap" title="Snap to Bottom-Right Corner">📌</button>
@@ -219,23 +252,37 @@
     </div>
   </div>
 
-  <!-- SHORTCUT SETTINGS MODAL -->
-  <div id="shortcut-modal">
+  <!-- APP SETTINGS MODAL -->
+  <div id="settings-modal">
     <div class="modal-card">
-      <h3>Change Global Shortcut</h3>
-      <p>Select your preferred hotkey to instantly show or hide Prompt Cowboy anywhere:</p>
-      <select id="shortcut-select">
-        <option value="CommandOrControl+Shift+P">Ctrl + Shift + P (Default)</option>
-        <option value="Alt+Space">Alt + Space</option>
-        <option value="CommandOrControl+Space">Ctrl + Space</option>
-        <option value="CommandOrControl+Shift+Space">Ctrl + Shift + Space</option>
-        <option value="F1">F1</option>
-        <option value="F4">F4</option>
-        <option value="Alt+P">Alt + P</option>
-      </select>
+      <div class="modal-header">
+        <h3>⚙ Prompt Cowboy Preferences</h3>
+      </div>
+
+      <div class="form-group">
+        <label>Global Activation Shortcut:</label>
+        <select id="shortcut-select">
+          <option value="CommandOrControl+Shift+P">Ctrl + Shift + P (Default)</option>
+          <option value="Alt+Space">Alt + Space</option>
+          <option value="CommandOrControl+Space">Ctrl + Space</option>
+          <option value="CommandOrControl+Shift+Space">Ctrl + Shift + Space</option>
+          <option value="F1">F1</option>
+          <option value="F4">F4</option>
+          <option value="Alt+P">Alt + P</option>
+        </select>
+      </div>
+
+      <label class="checkbox-row">
+        <input type="checkbox" id="autostart-checkbox" />
+        <span>Launch automatically when Windows starts</span>
+      </label>
+
       <div class="modal-actions">
-        <button class="btn-action btn-cancel" id="modal-cancel">Cancel</button>
-        <button class="btn-action btn-save" id="modal-save">Save Shortcut</button>
+        <button class="btn-action btn-secondary" id="btn-check-updates">Check Updates</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-action btn-secondary" id="modal-cancel">Close</button>
+          <button class="btn-action btn-save" id="modal-save">Save</button>
+        </div>
       </div>
     </div>
   </div>
@@ -249,9 +296,11 @@
     const btnReload = document.getElementById('btn-reload');
     const btnSnap = document.getElementById('btn-snap');
 
-    const shortcutBadge = document.getElementById('shortcut-badge');
-    const shortcutModal = document.getElementById('shortcut-modal');
+    const settingsBadge = document.getElementById('settings-badge');
+    const settingsModal = document.getElementById('settings-modal');
     const shortcutSelect = document.getElementById('shortcut-select');
+    const autostartCheckbox = document.getElementById('autostart-checkbox');
+    const btnCheckUpdates = document.getElementById('btn-check-updates');
     const modalCancel = document.getElementById('modal-cancel');
     const modalSave = document.getElementById('modal-save');
 
@@ -259,7 +308,9 @@
     window.electronAPI.getConfig().then(cfg => {
       if (cfg.shortcut) {
         shortcutSelect.value = cfg.shortcut;
-        shortcutBadge.textContent = cfg.shortcut.replace('CommandOrControl', 'Ctrl') + ' ⚙';
+      }
+      if (cfg.openAtLogin !== undefined) {
+        autostartCheckbox.checked = cfg.openAtLogin;
       }
     });
 
@@ -277,11 +328,11 @@
     let isDragging = false;
     let startX = 0;
     let startY = 0;
-    let dragThreshold = 5; // pixels moved before treating as drag instead of click
+    let dragThreshold = 5;
     let totalMoved = 0;
 
     bubbleContainer.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // only left click
+      if (e.button !== 0) return;
       isDragging = true;
       startX = e.screenX;
       startY = e.screenY;
@@ -303,7 +354,6 @@
     window.addEventListener('mouseup', (e) => {
       if (!isDragging) return;
       isDragging = false;
-      // If user barely moved mouse (< 5px), treat it as a click and expand!
       if (totalMoved < dragThreshold) {
         window.electronAPI.expand();
       }
@@ -321,29 +371,32 @@
       window.electronAPI.snapToCorner();
     });
 
-    shortcutBadge.onclick = () => {
-      shortcutModal.style.display = 'flex';
+    settingsBadge.onclick = () => {
+      settingsModal.style.display = 'flex';
     };
 
     modalCancel.onclick = () => {
-      shortcutModal.style.display = 'none';
+      settingsModal.style.display = 'none';
+    };
+
+    btnCheckUpdates.onclick = async () => {
+      await window.electronAPI.checkUpdates();
     };
 
     modalSave.onclick = async () => {
-      const selected = shortcutSelect.value;
-      const res = await window.electronAPI.setCustomShortcut(selected);
-      if (res.success) {
-        shortcutBadge.textContent = selected.replace('CommandOrControl', 'Ctrl') + ' ⚙';
-        shortcutModal.style.display = 'none';
-      } else {
-        alert('Could not register shortcut. It may be in use by another app.');
-      }
+      const selectedShortcut = shortcutSelect.value;
+      const enableAutostart = autostartCheckbox.checked;
+
+      await window.electronAPI.setCustomShortcut(selectedShortcut);
+      await window.electronAPI.toggleAutostart(enableAutostart);
+
+      settingsModal.style.display = 'none';
     };
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        if (shortcutModal.style.display === 'flex') {
-          shortcutModal.style.display = 'none';
+        if (settingsModal.style.display === 'flex') {
+          settingsModal.style.display = 'none';
         } else {
           window.electronAPI.collapse();
         }
