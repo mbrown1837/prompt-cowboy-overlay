@@ -24,11 +24,13 @@
       width: 100%;
       height: 100%;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       background: transparent !important;
       cursor: grab;
       overflow: hidden !important;
+      position: relative;
     }
     #bubble-container:active {
       cursor: grabbing;
@@ -63,6 +65,20 @@
       pointer-events: none;
       image-rendering: -webkit-optimize-contrast;
       image-rendering: crisp-edges;
+    }
+
+    /* Loading Spinner State */
+    .bubble-inner.loading {
+      border: 2px solid transparent;
+      border-top-color: #f97316;
+      border-right-color: #f97316;
+      animation: spin 0.75s linear infinite;
+      box-shadow: 0 0 15px rgba(249, 115, 22, 0.85);
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
     /* 2. EXPANDED TOP HEADER */
@@ -145,7 +161,7 @@
   <!-- 1. FLOATING BUBBLE (Grammarly 32px Round Mascot Badge) -->
   <div id="bubble-container" title="Click to Open Prompt Cowboy (Drag to Reposition)">
     <div class="bubble-inner" id="bubble-click-target">
-      <img src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
+      <img id="mascot-img" src="./PC-pixel-icon.png" alt="Prompt Cowboy" />
     </div>
   </div>
 
@@ -176,11 +192,19 @@
     function showBubble() {
       panelHeader.style.display = 'none';
       bubbleContainer.style.display = 'flex';
+      bubbleClickTarget.classList.remove('loading');
     }
 
     function showPanel() {
       bubbleContainer.style.display = 'none';
       panelHeader.style.display = 'flex';
+      bubbleClickTarget.classList.remove('loading');
+    }
+
+    function showLoading() {
+      panelHeader.style.display = 'none';
+      bubbleContainer.style.display = 'flex';
+      bubbleClickTarget.classList.add('loading');
     }
 
     // Smart Mouse Drag & Click Handler
@@ -245,6 +269,8 @@
         showBubble();
       } else if (state === 'expanded') {
         showPanel();
+      } else if (state === 'loading') {
+        showLoading();
       }
     });
   </script>

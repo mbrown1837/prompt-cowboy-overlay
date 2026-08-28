@@ -1,6 +1,7 @@
-const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, session, net } = require('electron');
+const { app, BrowserWindow, WebContentsView, globalShortcut, Tray, Menu, screen, nativeImage, ipcMain, dialog, session, net, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 let autoUpdater = null;
 try {
@@ -16,6 +17,7 @@ let onboardingWindow = null;
 let tray = null;
 let isExpanded = false;
 let isAnimating = false;
+let keyhookProcess = null;
 
 // Compact Mascot Dimensions
 const BUBBLE_WIDTH = 36;
@@ -229,9 +231,9 @@ function openSettingsWindow() {
 
   settingsWindow = new BrowserWindow({
     width: 390,
-    height: 480,
+    height: 500,
     x: workArea.x + Math.round((workArea.width - 390) / 2),
-    y: workArea.y + Math.round((workArea.height - 480) / 2),
+    y: workArea.y + Math.round((workArea.height - 500) / 2),
     frame: true,
     title: 'Prompt Cowboy Settings',
     resizable: false,
@@ -264,9 +266,9 @@ function openOnboardingWindow() {
 
   onboardingWindow = new BrowserWindow({
     width: 480,
-    height: 520,
+    height: 530,
     x: workArea.x + Math.round((workArea.width - 480) / 2),
-    y: workArea.y + Math.round((workArea.height - 520) / 2),
+    y: workArea.y + Math.round((workArea.height - 530) / 2),
     frame: true,
     title: 'Welcome to Prompt Cowboy',
     resizable: false,
@@ -286,6 +288,125 @@ function openOnboardingWindow() {
   onboardingWindow.on('closed', () => {
     onboardingWindow = null;
   });
+}
+
+// ----------------- Headless Inline /cowboy Polishing Engine -----------------
+async function polishPromptHeadless(roughPrompt) {
+  if (!contentView) return null;
+
+  try {
+    const jsInjection = `
+      (function() {
+        return new Promise((resolve) => {
+          var ta = document.querySelector('textarea') || document.querySelector('input[type="text"]');
+          if (!ta) {
+            resolve({ success: false, error: 'no_textarea' });
+            return;
+          }
+          ta.value = ${JSON.stringify(roughPrompt)};
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.dispatchEvent(new Event('change', { bubbles: true }));
+
+          setTimeout(function() {
+            var btn = document.querySelector('button[type="submit"]') || 
+                      Array.from(document.querySelectorAll('button')).find(b => b.querySelector('svg') || b.textContent.includes('Improve') || b.textContent.includes('↑'));
+            if (btn) {
+              btn.click();
+            }
+
+            // Poll for result
+            var attempts = 0;
+            var checkInterval = setInterval(function() {
+              attempts++;
+              // Look for generated prompt output or copy button
+              var copyBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Copy') || b.title === 'Copy');
+              var outputEl = document.querySelector('.prose') || document.querySelector('[data-testid="prompt-output"]') || document.querySelector('.whitespace-pre-wrap');
+
+              if (outputEl && outputEl.innerText && outputEl.innerText.length > roughPrompt.length) {
+                clearInterval(checkInterval);
+                resolve({ success: true, polished: outputEl.innerText });
+                return;
+              }
+
+              if (attempts > 35) { // 3.5s timeout
+                clearInterval(checkInterval);
+                var fallback = outputEl ? outputEl.innerText : null;
+                resolve({ success: true, polished: fallback || roughPrompt });
+              }
+            }, 100);
+          }, 150);
+        });
+      })();
+    `;
+
+    const result = await contentView.webContents.executeJavaScript(jsInjection);
+    return result && result.polished ? result.polished : roughPrompt;
+  } catch (err) {
+    console.error('Headless polish error:', err);
+    return roughPrompt;
+  }
+}
+
+function startKeyhookEngine() {
+  const hookScript = path.join(__dirname, 'keyhook.py');
+  if (!fs.existsSync(hookScript)) return;
+
+  const pythonExe = process.platform === 'win32' ? 'python' : 'python3';
+
+  try {
+    keyhookProcess = spawn(pythonExe, [hookScript], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const config = loadConfig();
+    const activeTriggers = config.inlineTrigger ? `${config.inlineTrigger},/cowboy,/cowboys` : '/cowboy,/cowboys';
+    keyhookProcess.stdin.write(`SET_TRIGGERS:${activeTriggers}\n`);
+
+    keyhookProcess.stdout.on('data', async (data) => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (line.startsWith('PAYLOAD:')) {
+          try {
+            const jsonStr = line.slice('PAYLOAD:'.length).trim();
+            const payload = JSON.parse(jsonStr);
+
+            if (payload.event === 'trigger' && payload.roughPrompt) {
+              // 1. Show spinning loading badge on mascot
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('state-change', 'loading');
+              }
+
+              // 2. Headless polish through Prompt Cowboy
+              const polished = await polishPromptHeadless(payload.roughPrompt);
+
+              // 3. Write to clipboard & trigger auto-paste
+              if (polished) {
+                clipboard.writeText(polished);
+                if (keyhookProcess && !keyhookProcess.killed) {
+                  keyhookProcess.stdin.write('PASTE:\n');
+                }
+              }
+
+              // 4. Restore resting mascot state
+              setTimeout(() => {
+                if (mainWindow && !mainWindow.isDestroyed() && !isExpanded) {
+                  mainWindow.webContents.send('state-change', 'bubble');
+                }
+              }, 400);
+            }
+          } catch (e) {
+            console.error('Payload parse error:', e);
+          }
+        }
+      }
+    });
+
+    keyhookProcess.on('error', (e) => {
+      console.log('Keyhook process error:', e.message);
+    });
+  } catch (e) {
+    console.log('Failed to start keyhook:', e);
+  }
 }
 
 function registerAppShortcut(shortcutKey) {
@@ -398,6 +519,9 @@ ipcMain.handle('get-config', () => {
 
 ipcMain.handle('save-config', (_event, cfg) => {
   saveConfig(cfg);
+  if (keyhookProcess && cfg.inlineTrigger) {
+    keyhookProcess.stdin.write(`SET_TRIGGERS:${cfg.inlineTrigger},/cowboy,/cowboys\n`);
+  }
   return true;
 });
 
@@ -544,7 +668,6 @@ function createWindow() {
     }
   });
 
-  // Open onboarding on first run
   if (!config.hasSeenOnboarding) {
     setTimeout(() => {
       openOnboardingWindow();
@@ -622,6 +745,9 @@ function createTray() {
       label: 'Exit',
       click: () => {
         app.isQuitting = true;
+        if (keyhookProcess) {
+          keyhookProcess.kill();
+        }
         const ses = session.fromPartition('persist:promptcowboy');
         ses.cookies.flushStore().then(() => {
           app.quit();
@@ -641,6 +767,7 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   setupAutoUpdater();
+  startKeyhookEngine();
 
   registerAppShortcut(config.shortcut);
 
@@ -651,4 +778,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  if (keyhookProcess) {
+    keyhookProcess.kill();
+  }
 });
