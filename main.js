@@ -17,7 +17,7 @@ let onboardingWindow = null;
 let tray = null;
 let isExpanded = false;
 let isAnimating = false;
-let keyhookProcess = null;
+let hookEngineProcess = null;
 
 // Compact Mascot Dimensions
 const BUBBLE_WIDTH = 36;
@@ -28,6 +28,16 @@ const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
 const ICON_PATH = path.join(__dirname, 'PC-pixel-icon.png');
 const ICO_PATH = path.join(__dirname, 'icon.ico');
 const DEFAULT_URL = 'https://www.promptcowboy.ai/30c09323-e446-4b58-9e85-7077bf9b9547/prompt/7e6d840c-3cc7-43f5-938c-7c4453fa8d40';
+
+function getHookEnginePath() {
+  const localPath = path.join(__dirname, 'hook_engine.exe');
+  if (fs.existsSync(localPath)) return localPath;
+  const appPath = path.join(process.resourcesPath, 'hook_engine.exe');
+  if (fs.existsSync(appPath)) return appPath;
+  const rootAppPath = path.join(path.dirname(process.execPath), 'hook_engine.exe');
+  if (fs.existsSync(rootAppPath)) return rootAppPath;
+  return localPath;
+}
 
 function loadConfig() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -314,21 +324,18 @@ async function polishPromptHeadless(roughPrompt) {
               btn.click();
             }
 
-            // Poll for result
             var attempts = 0;
             var checkInterval = setInterval(function() {
               attempts++;
-              // Look for generated prompt output or copy button
-              var copyBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Copy') || b.title === 'Copy');
               var outputEl = document.querySelector('.prose') || document.querySelector('[data-testid="prompt-output"]') || document.querySelector('.whitespace-pre-wrap');
 
-              if (outputEl && outputEl.innerText && outputEl.innerText.length > roughPrompt.length) {
+              if (outputEl && outputEl.innerText && outputEl.innerText.length > (roughPrompt.length + 10)) {
                 clearInterval(checkInterval);
                 resolve({ success: true, polished: outputEl.innerText });
                 return;
               }
 
-              if (attempts > 35) { // 3.5s timeout
+              if (attempts > 35) {
                 clearInterval(checkInterval);
                 var fallback = outputEl ? outputEl.innerText : null;
                 resolve({ success: true, polished: fallback || roughPrompt });
@@ -347,65 +354,64 @@ async function polishPromptHeadless(roughPrompt) {
   }
 }
 
-function startKeyhookEngine() {
-  const hookScript = path.join(__dirname, 'keyhook.py');
-  if (!fs.existsSync(hookScript)) return;
-
-  const pythonExe = process.platform === 'win32' ? 'python' : 'python3';
+// ----------------- Native Global Keyboard Hook Engine -----------------
+function startNativeHookEngine() {
+  const exePath = getHookEnginePath();
+  if (!fs.existsSync(exePath)) {
+    console.log('hook_engine.exe not found at:', exePath);
+    return;
+  }
 
   try {
-    keyhookProcess = spawn(pythonExe, [hookScript], {
+    hookEngineProcess = spawn(exePath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     const config = loadConfig();
-    const activeTriggers = config.inlineTrigger ? `${config.inlineTrigger},/cowboy,/cowboys` : '/cowboy,/cowboys';
-    keyhookProcess.stdin.write(`SET_TRIGGERS:${activeTriggers}\n`);
+    const activeTriggers = config.inlineTrigger ? `${config.inlineTrigger},/cowboy,/cowboys,/prompt,/pc` : '/cowboy,/cowboys,/prompt,/pc';
+    hookEngineProcess.stdin.write(`SET_TRIGGERS:${activeTriggers}\n`);
 
-    keyhookProcess.stdout.on('data', async (data) => {
+    hookEngineProcess.stdout.on('data', async (data) => {
       const lines = data.toString().split('\n');
       for (const line of lines) {
-        if (line.startsWith('PAYLOAD:')) {
-          try {
-            const jsonStr = line.slice('PAYLOAD:'.length).trim();
-            const payload = JSON.parse(jsonStr);
-
-            if (payload.event === 'trigger' && payload.roughPrompt) {
-              // 1. Show spinning loading badge on mascot
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('state-change', 'loading');
-              }
-
-              // 2. Headless polish through Prompt Cowboy
-              const polished = await polishPromptHeadless(payload.roughPrompt);
-
-              // 3. Write to clipboard & trigger auto-paste
-              if (polished) {
-                clipboard.writeText(polished);
-                if (keyhookProcess && !keyhookProcess.killed) {
-                  keyhookProcess.stdin.write('PASTE:\n');
-                }
-              }
-
-              // 4. Restore resting mascot state
-              setTimeout(() => {
-                if (mainWindow && !mainWindow.isDestroyed() && !isExpanded) {
-                  mainWindow.webContents.send('state-change', 'bubble');
-                }
-              }, 400);
+        const trimmed = line.trim();
+        if (trimmed.startsWith('PAYLOAD:')) {
+          const roughPrompt = trimmed.substring('PAYLOAD:'.length).trim();
+          if (roughPrompt.length > 0) {
+            // 1. Show glowing spinning badge on mascot
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('state-change', 'loading');
             }
-          } catch (e) {
-            console.error('Payload parse error:', e);
+
+            // 2. Headless polish through Prompt Cowboy session
+            const polished = await polishPromptHeadless(roughPrompt);
+
+            // 3. Write to clipboard & trigger instant paste
+            if (polished) {
+              clipboard.writeText(polished);
+              if (hookEngineProcess && !hookEngineProcess.killed) {
+                hookEngineProcess.stdin.write('PASTE:\n');
+              }
+            }
+
+            // 4. Restore resting mascot state
+            setTimeout(() => {
+              if (mainWindow && !mainWindow.isDestroyed() && !isExpanded) {
+                mainWindow.webContents.send('state-change', 'bubble');
+              }
+            }, 300);
           }
         }
       }
     });
 
-    keyhookProcess.on('error', (e) => {
-      console.log('Keyhook process error:', e.message);
+    hookEngineProcess.on('error', (err) => {
+      console.log('Hook engine spawn error:', err);
     });
+
+    console.log('hook_engine.exe started successfully.');
   } catch (e) {
-    console.log('Failed to start keyhook:', e);
+    console.log('Hook engine execution error:', e);
   }
 }
 
@@ -519,8 +525,8 @@ ipcMain.handle('get-config', () => {
 
 ipcMain.handle('save-config', (_event, cfg) => {
   saveConfig(cfg);
-  if (keyhookProcess && cfg.inlineTrigger) {
-    keyhookProcess.stdin.write(`SET_TRIGGERS:${cfg.inlineTrigger},/cowboy,/cowboys\n`);
+  if (hookEngineProcess && cfg.inlineTrigger) {
+    hookEngineProcess.stdin.write(`SET_TRIGGERS:${cfg.inlineTrigger},/cowboy,/cowboys,/prompt,/pc\n`);
   }
   return true;
 });
@@ -745,8 +751,8 @@ function createTray() {
       label: 'Exit',
       click: () => {
         app.isQuitting = true;
-        if (keyhookProcess) {
-          keyhookProcess.kill();
+        if (hookEngineProcess) {
+          try { hookEngineProcess.kill(); } catch (e) {}
         }
         const ses = session.fromPartition('persist:promptcowboy');
         ses.cookies.flushStore().then(() => {
@@ -767,7 +773,7 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   setupAutoUpdater();
-  startKeyhookEngine();
+  startNativeHookEngine();
 
   registerAppShortcut(config.shortcut);
 
@@ -778,7 +784,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
-  if (keyhookProcess) {
-    keyhookProcess.kill();
+  if (hookEngineProcess) {
+    try { hookEngineProcess.kill(); } catch (e) {}
   }
 });

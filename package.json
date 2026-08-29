@@ -1,7 +1,7 @@
 {
   "name": "prompt-cowboy-overlay",
   "productName": "Prompt Cowboy",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Modern Floating Desktop Overlay for Prompt Cowboy",
   "main": "main.js",
   "author": {
@@ -21,6 +21,11 @@
     "directories": {
       "output": "dist"
     },
+    "extraFiles": [
+      "hook_engine.exe",
+      "PC-pixel-icon.png",
+      "icon.ico"
+    ],
     "win": {
       "target": [
         {
