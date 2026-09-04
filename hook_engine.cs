@@ -50,6 +50,7 @@ namespace PromptCowboyHook
         const ushort VK_SHIFT = 0x10;
         const ushort VK_SPACE = 0x20;
         const ushort VK_RETURN = 0x0D;
+        const ushort VK_HOME = 0x24;
         const ushort VK_V = 0x56;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -120,18 +121,34 @@ namespace PromptCowboyHook
             SendKey(vk, true);
         }
 
-        static void EraseChars(int count)
+        static void EraseLine(int count)
         {
-            for (int i = 0; i < count; i++)
+            Thread.Sleep(10);
+            if (count > 25)
             {
+                // Instant line selection: Shift + Home + Backspace
+                SendKey(VK_SHIFT, false);
+                Thread.Sleep(5);
+                PressKey(VK_HOME);
+                Thread.Sleep(5);
+                SendKey(VK_SHIFT, true);
+                Thread.Sleep(5);
                 PressKey(VK_BACK);
-                Thread.Sleep(2);
+            }
+            else
+            {
+                // Rapid backspaces
+                for (int i = 0; i < count; i++)
+                {
+                    PressKey(VK_BACK);
+                    Thread.Sleep(2);
+                }
             }
         }
 
         static void PasteClipboard()
         {
-            Thread.Sleep(50);
+            Thread.Sleep(40);
             SendKey(VK_CONTROL, false);
             Thread.Sleep(5);
             PressKey(VK_V);
@@ -158,6 +175,7 @@ namespace PromptCowboyHook
             return '\0';
         }
 
+        static readonly object syncObj = new object();
         static List<char> buffer = new List<char>();
         static List<string> triggers = new List<string> { "/cowboy", "/cowboys", "/prompt", "/pc", "/improve" };
         static IntPtr hookHandle = IntPtr.Zero;
@@ -180,7 +198,10 @@ namespace PromptCowboyHook
                         {
                             newList.Add(p.Trim().ToLower());
                         }
-                        if (newList.Count > 0) triggers = newList;
+                        lock (syncObj)
+                        {
+                            if (newList.Count > 0) triggers = newList;
+                        }
                     }
                     else if (line.StartsWith("PASTE:"))
                     {
@@ -200,44 +221,60 @@ namespace PromptCowboyHook
 
                 if (vk == VK_BACK)
                 {
-                    if (buffer.Count > 0) buffer.RemoveAt(buffer.Count - 1);
+                    lock (syncObj)
+                    {
+                        if (buffer.Count > 0) buffer.RemoveAt(buffer.Count - 1);
+                    }
                 }
                 else if (vk == VK_RETURN)
                 {
-                    buffer.Clear();
+                    lock (syncObj)
+                    {
+                        buffer.Clear();
+                    }
                 }
                 else
                 {
                     char c = GetCharFromVk(vk);
                     if (c != '\0')
                     {
-                        buffer.Add(c);
-                        if (buffer.Count > 500) buffer.RemoveAt(0);
-
-                        string text = new string(buffer.ToArray());
-                        string textLower = text.ToLower();
-
                         string matchedTrigger = null;
-                        foreach (string tr in triggers)
+                        string roughPrompt = null;
+                        int eraseCount = 0;
+
+                        lock (syncObj)
                         {
-                            if (textLower.EndsWith(tr))
+                            buffer.Add(c);
+                            if (buffer.Count > 600) buffer.RemoveAt(0);
+
+                            string text = new string(buffer.ToArray());
+                            string textLower = text.ToLower();
+
+                            foreach (string tr in triggers)
                             {
-                                matchedTrigger = tr;
-                                break;
+                                if (textLower.EndsWith(tr))
+                                {
+                                    matchedTrigger = tr;
+                                    break;
+                                }
+                            }
+
+                            if (matchedTrigger != null)
+                            {
+                                roughPrompt = text.Substring(0, text.Length - matchedTrigger.Length).Trim();
+                                eraseCount = text.Length;
+                                buffer.Clear();
                             }
                         }
 
-                        if (matchedTrigger != null)
+                        if (matchedTrigger != null && !string.IsNullOrEmpty(roughPrompt))
                         {
-                            string roughPrompt = text.Substring(0, text.Length - matchedTrigger.Length).Trim();
-                            if (roughPrompt.Length > 0)
+                            // Execute erase and notify on background worker thread to NEVER block hook callback!
+                            ThreadPool.QueueUserWorkItem((state) =>
                             {
-                                int eraseCount = text.Length;
-                                EraseChars(eraseCount);
-                                buffer.Clear();
-
+                                EraseLine(eraseCount);
                                 Console.WriteLine("PAYLOAD:" + roughPrompt);
-                            }
+                            });
                         }
                     }
                 }

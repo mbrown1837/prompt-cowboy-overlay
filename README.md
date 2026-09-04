@@ -8,7 +8,7 @@ A modern, ultra-lightweight, Grammarly / Pieces-style always-on-top floating des
 
 Download the latest standalone installer from the [Releases](https://github.com/mbrown1837/prompt-cowboy-overlay/releases/latest) page:
 
-👉 **[Download Prompt Cowboy Setup v1.2.1 (.exe)](https://github.com/mbrown1837/prompt-cowboy-overlay/releases/download/v1.2.1/Prompt.Cowboy.Setup.1.2.1.exe)**
+👉 **[Download Prompt Cowboy Setup v1.2.3 (.exe)](https://github.com/mbrown1837/prompt-cowboy-overlay/releases/download/v1.2.3/Prompt.Cowboy.Setup.1.2.3.exe)**
 
 ---
 

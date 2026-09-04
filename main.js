@@ -25,18 +25,35 @@ const BUBBLE_HEIGHT = 36;
 const HEADER_HEIGHT = 42;
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'overlay-config.json');
+const LOG_PATH = path.join(app.getPath('userData'), 'overlay.log');
 const ICON_PATH = path.join(__dirname, 'PC-pixel-icon.png');
 const ICO_PATH = path.join(__dirname, 'icon.ico');
 const DEFAULT_URL = 'https://www.promptcowboy.ai/30c09323-e446-4b58-9e85-7077bf9b9547/prompt/7e6d840c-3cc7-43f5-938c-7c4453fa8d40';
 
+function appLog(msg) {
+  try {
+    const timestamp = new Date().toISOString();
+    fs.appendFileSync(LOG_PATH, `[${timestamp}] ${msg}\n`, 'utf-8');
+  } catch (e) {}
+}
+
 function getHookEnginePath() {
-  const localPath = path.join(__dirname, 'hook_engine.exe');
-  if (fs.existsSync(localPath)) return localPath;
-  const appPath = path.join(process.resourcesPath, 'hook_engine.exe');
-  if (fs.existsSync(appPath)) return appPath;
-  const rootAppPath = path.join(path.dirname(process.execPath), 'hook_engine.exe');
-  if (fs.existsSync(rootAppPath)) return rootAppPath;
-  return localPath;
+  const candidates = [
+    path.join(__dirname, 'hook_engine.exe'),
+    path.join(process.resourcesPath, 'hook_engine.exe'),
+    path.join(path.dirname(process.execPath), 'hook_engine.exe'),
+    path.join(process.cwd(), 'hook_engine.exe')
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      appLog(`Found hook_engine at: ${p}`);
+      return p;
+    }
+  }
+
+  appLog(`hook_engine.exe not found in candidates: ${JSON.stringify(candidates)}`);
+  return candidates[0];
 }
 
 function loadConfig() {
@@ -302,7 +319,12 @@ function openOnboardingWindow() {
 
 // ----------------- Headless Inline /cowboy Polishing Engine -----------------
 async function polishPromptHeadless(roughPrompt) {
-  if (!contentView) return null;
+  if (!contentView) {
+    appLog('polishPromptHeadless: contentView not ready');
+    return roughPrompt;
+  }
+
+  appLog(`Starting headless polish for: "${roughPrompt.slice(0, 40)}..."`);
 
   try {
     const jsInjection = `
@@ -313,13 +335,27 @@ async function polishPromptHeadless(roughPrompt) {
             resolve({ success: false, error: 'no_textarea' });
             return;
           }
-          ta.value = ${JSON.stringify(roughPrompt)};
+
+          // React-compatible input setter
+          var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value") ? 
+                             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set : null;
+
+          if (nativeSetter) {
+            nativeSetter.call(ta, ${JSON.stringify(roughPrompt)});
+          } else {
+            ta.value = ${JSON.stringify(roughPrompt)};
+          }
+
           ta.dispatchEvent(new Event('input', { bubbles: true }));
           ta.dispatchEvent(new Event('change', { bubbles: true }));
 
           setTimeout(function() {
             var btn = document.querySelector('button[type="submit"]') || 
-                      Array.from(document.querySelectorAll('button')).find(b => b.querySelector('svg') || b.textContent.includes('Improve') || b.textContent.includes('↑'));
+                      document.querySelector('button[aria-label="Submit"]') ||
+                      Array.from(document.querySelectorAll('button')).find(function(b) {
+                        return (b.innerText && (b.innerText.includes('Improve') || b.innerText.includes('↑'))) || b.querySelector('svg');
+                      });
+
             if (btn) {
               btn.click();
             }
@@ -327,29 +363,32 @@ async function polishPromptHeadless(roughPrompt) {
             var attempts = 0;
             var checkInterval = setInterval(function() {
               attempts++;
-              var outputEl = document.querySelector('.prose') || document.querySelector('[data-testid="prompt-output"]') || document.querySelector('.whitespace-pre-wrap');
+              var outputEl = document.querySelector('.prose') || 
+                             document.querySelector('[data-testid="prompt-output"]') || 
+                             document.querySelector('.whitespace-pre-wrap');
 
-              if (outputEl && outputEl.innerText && outputEl.innerText.length > (roughPrompt.length + 10)) {
+              if (outputEl && outputEl.innerText && outputEl.innerText.length > (${JSON.stringify(roughPrompt)}.length + 10)) {
                 clearInterval(checkInterval);
                 resolve({ success: true, polished: outputEl.innerText });
                 return;
               }
 
-              if (attempts > 35) {
+              if (attempts > 40) { // 4s timeout
                 clearInterval(checkInterval);
                 var fallback = outputEl ? outputEl.innerText : null;
-                resolve({ success: true, polished: fallback || roughPrompt });
+                resolve({ success: true, polished: fallback || ${JSON.stringify(roughPrompt)} });
               }
             }, 100);
-          }, 150);
+          }, 200);
         });
       })();
     `;
 
     const result = await contentView.webContents.executeJavaScript(jsInjection);
+    appLog(`Headless polish result: success=${result?.success}`);
     return result && result.polished ? result.polished : roughPrompt;
   } catch (err) {
-    console.error('Headless polish error:', err);
+    appLog(`Headless polish error: ${err.message}`);
     return roughPrompt;
   }
 }
@@ -358,7 +397,7 @@ async function polishPromptHeadless(roughPrompt) {
 function startNativeHookEngine() {
   const exePath = getHookEnginePath();
   if (!fs.existsSync(exePath)) {
-    console.log('hook_engine.exe not found at:', exePath);
+    appLog(`hook_engine.exe not found at: ${exePath}`);
     return;
   }
 
@@ -377,6 +416,8 @@ function startNativeHookEngine() {
         const trimmed = line.trim();
         if (trimmed.startsWith('PAYLOAD:')) {
           const roughPrompt = trimmed.substring('PAYLOAD:'.length).trim();
+          appLog(`Received trigger PAYLOAD: "${roughPrompt.slice(0, 30)}..."`);
+
           if (roughPrompt.length > 0) {
             // 1. Show glowing spinning badge on mascot
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -391,6 +432,7 @@ function startNativeHookEngine() {
               clipboard.writeText(polished);
               if (hookEngineProcess && !hookEngineProcess.killed) {
                 hookEngineProcess.stdin.write('PASTE:\n');
+                appLog('Sent PASTE command to hook_engine');
               }
             }
 
@@ -406,12 +448,16 @@ function startNativeHookEngine() {
     });
 
     hookEngineProcess.on('error', (err) => {
-      console.log('Hook engine spawn error:', err);
+      appLog(`Hook engine spawn error: ${err.message}`);
     });
 
-    console.log('hook_engine.exe started successfully.');
+    hookEngineProcess.on('exit', (code) => {
+      appLog(`Hook engine exited with code: ${code}`);
+    });
+
+    appLog('hook_engine.exe started successfully.');
   } catch (e) {
-    console.log('Hook engine execution error:', e);
+    appLog(`Hook engine execution error: ${e.message}`);
   }
 }
 
